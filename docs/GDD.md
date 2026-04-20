@@ -1,5 +1,5 @@
 # Game Design Document (GDD)
-## OBLIVIO
+## Oblivio
 
 ---
 
@@ -162,8 +162,8 @@ Source a pre-made **pixel art playing card sprite sheet** from itch.io or OpenGa
 | Match success      | SFX            | Bright chime or "ding"         |
 | Mismatch           | SFX            | Low buzz or "thud"             |
 | HP critical (<25%) | SFX (looping?) | Optional warning beep          |
-| Game Over          | Jingle         | Short sad 8-bit jingle         |
-| Win                | Jingle         | Short triumphant 8-bit jingle  |
+| Game Over          | Jingle         | Short sad retro jingle         |
+| Win                | Jingle         | Short triumphant retro jingle  |
 
 All audio should be sourced from royalty-free / CC0 libraries such as OpenGameArt.org or freesound.org.
 

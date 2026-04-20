@@ -1,5 +1,5 @@
 # Product Requirements Document (PRD)
-## OBLIVIO — A Pixel Art Memory Card Game
+## Oblivio — A Pixel Art Memory Card Game
 
 **Version:** 1.0  
 **Status:** Draft  
@@ -12,7 +12,7 @@
 
 ## 1. Overview
 
-Retro Memory is a single-player, pixel art memory card matching game built in Python using Pygame. The player flips cards on a grid to find matching pairs of retro/8-bit arcade icons. Every mismatched flip costs HP, and a scoring system rewards players who match quickly. The game is intended as a GUI-only personal project and is not scoped for production release.
+Oblivio is a single-player, pixel art memory card matching game built in Python using Pygame. The player flips cards on a grid to find matching pairs of pixel art playing cards. Every mismatched flip costs HP, and a scoring system rewards players who match quickly. The game is intended as a GUI-only personal project and is not scoped for production release.
 
 ---
 
@@ -20,7 +20,7 @@ Retro Memory is a single-player, pixel art memory card matching game built in Py
 
 - Build a fully playable memory card game within one month.
 - Use Python and Pygame as the sole technology stack.
-- Deliver a polished retro/8-bit pixel art visual style.
+- Deliver a polished pixel art visual style.
 - Keep scope tight and avoid feature creep.
 
 ---
@@ -93,7 +93,7 @@ All animations are implemented using Pygame's `pygame.transform.scale()` — no 
 - Win screen and Game Over screen have distinct visuals.
 
 ### 5.8 Audio
-- **Background music:** Looping chiptune/8-bit track during gameplay.
+- **Background music:** Looping chiptune track during gameplay.
 - **Sound effects:**
   - Card flip sound.
   - Match success sound.
@@ -106,7 +106,7 @@ All animations are implemented using Pygame's `pygame.transform.scale()` — no 
 
 ## 6. Visual Style
 
-- **Art style:** Pixel art, retro/8-bit aesthetic throughout.
+- **Art style:** Pixel art with a retro aesthetic throughout.
 - **Card backs:** Uniform pixel art design (e.g. retro pattern or logo).
 - **Card fronts:** Pixel art standard playing cards — 4 suits (♠ ♥ ♦ ♣) × 13 ranks (A, 2–10, J, Q, K).
 - **UI elements:** HP bar, score counter, and all text use pixel fonts.
