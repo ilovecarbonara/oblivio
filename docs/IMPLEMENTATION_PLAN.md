@@ -28,7 +28,7 @@
 
 ### Jim (Visuals / UI)
 
-- [ ] Source a pixel art playing card sprite sheet (all 52 cards + card back) from itch.io or OpenGameArt
+- [X] Source a pixel art playing card sprite sheet (all 52 cards + card back) from itch.io or OpenGameArt
 - [ ] Source a pixel art background image (dark arcade-style)
 - [ ] Set up `assets/images/` and `assets/audio/` directories
 - [ ] Slice/organize card sprites into individual files or set up a sprite sheet loader
