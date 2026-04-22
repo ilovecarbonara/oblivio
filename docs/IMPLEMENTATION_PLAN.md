@@ -17,12 +17,12 @@
 
 ### Jay (Game Logic)
 
-- [ ] Initialize the repo with the flat file structure (`main.py`, `game.py`, `card.py`, `grid.py`, `hp_bar.py`, `score.py`, `ui.py`)
-- [ ] Set up `main.py` as the entry point — initialize Pygame, create the window (800×600 or 1024×768), and start the game loop
-- [ ] Create the `Card` class in `card.py` with basic attributes: `suit`, `rank`, `position`, `state` (face-down / face-up / matched)
-- [ ] Create `grid.py` with grid generation logic — take a difficulty setting, randomly draw N cards from a 52-card pool, duplicate into pairs, shuffle, and assign grid positions
-- [ ] Implement card click detection in the game loop — translate mouse click coordinates to a grid cell and identify which card was clicked
-- [ ] Set up `game.py` with a basic game state manager — track `current_state` (MENU, PLAYING, GAME_OVER, WIN) and the selected difficulty
+- [x] Initialize the repo with the flat file structure (`main.py`, `game.py`, `card.py`, `grid.py`, `hp_bar.py`, `score.py`, `ui.py`)
+- [x] Set up `main.py` as the entry point — initialize Pygame, create the window (800×600 or 1024×768), and start the game loop
+- [x] Create the `Card` class in `card.py` with basic attributes: `suit`, `rank`, `position`, `state` (face-down / face-up / matched)
+- [x] Create `grid.py` with grid generation logic — take a difficulty setting, randomly draw N cards from a 52-card pool, duplicate into pairs, shuffle, and assign grid positions
+- [x] Implement card click detection in the game loop — translate mouse click coordinates to a grid cell and identify which card was clicked
+- [x] Set up `game.py` with a basic game state manager — track `current_state` (MENU, PLAYING, GAME_OVER, WIN) and the selected difficulty
 
 **Branch:** `week-1/Jay/project-setup-and-grid-logic`
 

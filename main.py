@@ -9,12 +9,12 @@ Owner: Jay (game logic)
 """
 
 import sys
-import random
 
 import pygame
 
-from card import Card, CardState, SUITS, RANKS
+from card import Card, CardState
 from game import Game, GameState, Difficulty
+import grid
 
 
 # ---------------------------------------------------------------------------
@@ -39,56 +39,13 @@ COLOR_TEXT         = (230, 230, 255)  # near-white text
 COLOR_DIM_TEXT     = (120, 120, 150)  # subdued text
 
 # ---------------------------------------------------------------------------
-# Placeholder grid builder
-# (Removed once grid.py is implemented — this entire block will be replaced
-#  by a call to grid.generate_grid(difficulty, card_w, card_h, padding, origin))
+# Layout constants — shared by grid.generate_grid() and the HUD renderer
 # ---------------------------------------------------------------------------
 
 CARD_W   = 90
 CARD_H   = 120
 PADDING  = 12
 HUD_H    = 60   # height reserved at top for HP bar / score (Jim's HUD area)
-
-
-def _build_placeholder_grid(difficulty: Difficulty) -> list[Card]:
-    """
-    Temporary inline grid builder used until grid.py is implemented.
-
-    Randomly samples `difficulty.pairs` unique cards from the 52-card pool,
-    duplicates them into pairs, shuffles, and assigns pixel rects.
-
-    TODO: Delete this function once grid.generate_grid() exists.
-    """
-    # 1. Build the 52-card pool and sample N unique cards
-    pool = [(s, r) for s in SUITS for r in RANKS]
-    sample = random.sample(pool, difficulty.pairs)
-
-    # 2. Duplicate into pairs and shuffle
-    combined = sample * 2
-    random.shuffle(combined)
-
-    # 3. Lay out on a cols×rows grid, centred on screen below the HUD
-    cols = difficulty.cols
-    rows = difficulty.rows
-
-    grid_w = cols * CARD_W + (cols - 1) * PADDING
-    grid_h = rows * CARD_H + (rows - 1) * PADDING
-
-    origin_x = (WINDOW_W - grid_w) // 2
-    origin_y = HUD_H + (WINDOW_H - HUD_H - grid_h) // 2
-
-    cards: list[Card] = []
-    for idx, (suit, rank) in enumerate(combined):
-        col = idx % cols
-        row = idx // cols
-
-        card = Card(suit, rank, grid_pos=(col, row))
-        x = origin_x + col * (CARD_W + PADDING)
-        y = origin_y + row * (CARD_H + PADDING)
-        card.rect = pygame.Rect(x, y, CARD_W, CARD_H)
-        cards.append(card)
-
-    return cards
 
 
 # ---------------------------------------------------------------------------
@@ -202,8 +159,15 @@ def main() -> None:
                     if game.state == GameState.MENU:
                         # TODO: replace with a proper difficulty selection
                         # screen once Jim's ui.py grid-select screen is ready.
-                        cards = _build_placeholder_grid(Difficulty.EASY)
-                        game.start_game(Difficulty.EASY, cards)
+                        diff = Difficulty.EASY
+                        grid_w = diff.cols * CARD_W + (diff.cols - 1) * PADDING
+                        grid_h = diff.rows * CARD_H + (diff.rows - 1) * PADDING
+                        origin = (
+                            (WINDOW_W - grid_w) // 2,
+                            HUD_H + (WINDOW_H - HUD_H - grid_h) // 2,
+                        )
+                        cards = grid.generate_grid(diff, CARD_W, CARD_H, PADDING, origin)
+                        game.start_game(diff, cards)
                         print("[INFO] Game started — difficulty: Easy (4×4)")
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
