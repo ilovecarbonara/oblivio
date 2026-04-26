@@ -33,12 +33,11 @@ PADDING = 10
 HUD_H   = 48   # height of the top HUD strip
 
 # ---------------------------------------------------------------------------
-# Layout constants  (in SCREEN pixels — card sprites are full-res)
+# TEMP MOCKUP (JAY: REPLACE THIS IN WEEK 2)
+# This allows Jim's visual flip/mismatch animations to be tested.
 # ---------------------------------------------------------------------------
-CARD_W  = 76
-CARD_H  = 100
-PADDING = 10
-HUD_H   = 48   # height of the top HUD strip
+MISMATCH_TIMER = pygame.USEREVENT + 1
+_face_up: list[Card] = []   # tracks up to 2 face-up cards
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +75,7 @@ def main() -> None:
                 if event.key == pygame.K_ESCAPE:
                     if game.state == GameState.PLAYING:
                         game.to_menu()
+                        _face_up.clear()
                         ui.reset_hp()
                         current_hp    = 100.0
                         current_score = 0
@@ -97,24 +97,31 @@ def main() -> None:
                         else:                    # PLAY
                             current_hp    = 100.0
                             current_score = 0
-                            
-                            # Call Jay's grid generation (Week 1 task)
-                            new_cards = grid.generate_grid(
-                                Difficulty.EASY, CARD_W, CARD_H, PADDING, WINDOW_W, HUD_H, WINDOW_H
-                            )
-                            # Fallback just in case grid.py is still empty
-                            if new_cards is None:
-                                new_cards = []
-                                
-                            game.start_game(Difficulty.EASY, new_cards)
-                            print(f"[INFO] Game started — Easy")
+                            _start_game_mockup(game, Difficulty.EASY)
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if game.state == GameState.PLAYING:
-                    clicked = game.handle_click(event.pos)
-                    if clicked and not ui.is_flipping(clicked):
-                        ui.start_flip(clicked)
-                        clicked.flip()
+                    # [TEMP MOCKUP] block clicks while mismatch timer runs
+                    if len(_face_up) >= 2:
+                        pass
+                    else:
+                        clicked = game.handle_click(event.pos)
+                        if clicked and not ui.is_flipping(clicked):
+                            ui.start_flip(clicked)
+                            clicked.flip()
+                            _face_up.append(clicked)
+                            if len(_face_up) == 2:
+                                pygame.time.set_timer(MISMATCH_TIMER, 1100, loops=1)
+
+            elif event.type == MISMATCH_TIMER:
+                # [TEMP MOCKUP] auto-flip cards back and deal damage
+                for c in _face_up:
+                    if c.state == CardState.FACE_UP:
+                        ui.trigger_mismatch_flash(c, c)
+                        ui.start_flip(c)
+                        c.flip_back()
+                        current_hp = max(0.0, current_hp - 10.0)
+                _face_up.clear()
 
         # -------------------------------------------------- animation ticks
         ui.update_flips()
@@ -157,6 +164,42 @@ def main() -> None:
 
     pygame.quit()
     sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
+# [TEMP MOCKUP - JAY: REPLACE IN WEEK 2]
+# Temporary grid generation so Jim's UI works before grid logic is finished.
+# Replace usage of this function with: grid.generate_grid(...)
+# ---------------------------------------------------------------------------
+def _start_game_mockup(game: Game, diff: Difficulty) -> None:
+    import random
+    from card import Card, SUITS, RANKS
+
+    pool  = [(s, r) for s in SUITS for r in RANKS]
+    picks = random.sample(pool, diff.pairs)
+    deck  = picks * 2      
+    random.shuffle(deck)
+
+    gw = diff.cols * CARD_W + (diff.cols - 1) * PADDING
+    gh = diff.rows * CARD_H + (diff.rows - 1) * PADDING
+    ox = (WINDOW_W - gw) // 2
+    oy = HUD_H + (WINDOW_H - HUD_H - gh) // 2
+
+    cards: list[Card] = []
+    for idx, (suit, rank) in enumerate(deck):
+        col = idx % diff.cols
+        row = idx // diff.cols
+        c   = Card(suit, rank, grid_pos=(col, row))
+        c.rect = pygame.Rect(
+            ox + col * (CARD_W + PADDING),
+            oy + row * (CARD_H + PADDING),
+            CARD_W,
+            CARD_H,
+        )
+        cards.append(c)
+
+    game.start_game(diff, cards)
+    print(f"[INFO] Game started — {diff.label} ({diff.cols}×{diff.rows})")
 
 
 if __name__ == "__main__":
