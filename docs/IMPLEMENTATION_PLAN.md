@@ -32,7 +32,6 @@
 - [ ] Source a pixel art background image (dark arcade-style)
 - [ ] Set up `assets/images/` and `assets/audio/` directories
 - [ ] Slice/organize card sprites into individual files or set up a sprite sheet loader
-- [ ] Install the **Press Start 2P** font (from Google Fonts) and confirm it renders in Pygame
 - [ ] Render a static grid of face-down cards on screen using placeholder or sourced card-back sprites
 - [ ] Draw the HUD layout skeleton on the game screen (HP bar placeholder on top-left, score placeholder on top-right)
 
@@ -68,6 +67,7 @@
 - [ ] Add a brief visual indicator for mismatches before cards flip back (e.g., red tint or shake)
 - [ ] Ensure the grid is centered on screen and cards are evenly spaced for all three grid sizes (4×4, 6×6, 8×8)
 - [ ] Add card hover effect (subtle highlight or cursor change when hovering over a clickable card)
+- [ ] Source and implement a final custom font that better matches the dark retro-horror theme (replacing the system fallback)
 
 **Branch:** `week-2/Jim/card-visuals-and-states`
 
