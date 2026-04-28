@@ -33,6 +33,15 @@ PADDING = 10
 HUD_H   = 48   # height of the top HUD strip
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Layout constants — shared by grid.generate_grid() and the HUD renderer
+# ---------------------------------------------------------------------------
+CARD_W   = 90
+CARD_H   = 120
+PADDING  = 12
+HUD_H    = 60   # height reserved at top for HP bar / score (Jim's HUD area)
+
+# ---------------------------------------------------------------------------
 # TEMP MOCKUP (JAY: REPLACE THIS IN WEEK 2)
 # This allows Jim's visual flip/mismatch animations to be tested.
 # ---------------------------------------------------------------------------
@@ -97,7 +106,17 @@ def main() -> None:
                         else:                    # PLAY
                             current_hp    = 100.0
                             current_score = 0
-                            _start_game_mockup(game, Difficulty.EASY)
+                            
+                            diff = Difficulty.EASY
+                            grid_w = diff.cols * CARD_W + (diff.cols - 1) * PADDING
+                            grid_h = diff.rows * CARD_H + (diff.rows - 1) * PADDING
+                            origin = (
+                                (WINDOW_W - grid_w) // 2,
+                                HUD_H + (WINDOW_H - HUD_H - grid_h) // 2,
+                            )
+                            cards = grid.generate_grid(diff, CARD_W, CARD_H, PADDING, origin)
+                            game.start_game(diff, cards)
+                            print("[INFO] Game started — difficulty: Easy (4×4)")
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if game.state == GameState.PLAYING:
@@ -164,42 +183,6 @@ def main() -> None:
 
     pygame.quit()
     sys.exit(0)
-
-
-# ---------------------------------------------------------------------------
-# [TEMP MOCKUP - JAY: REPLACE IN WEEK 2]
-# Temporary grid generation so Jim's UI works before grid logic is finished.
-# Replace usage of this function with: grid.generate_grid(...)
-# ---------------------------------------------------------------------------
-def _start_game_mockup(game: Game, diff: Difficulty) -> None:
-    import random
-    from card import Card, SUITS, RANKS
-
-    pool  = [(s, r) for s in SUITS for r in RANKS]
-    picks = random.sample(pool, diff.pairs)
-    deck  = picks * 2      
-    random.shuffle(deck)
-
-    gw = diff.cols * CARD_W + (diff.cols - 1) * PADDING
-    gh = diff.rows * CARD_H + (diff.rows - 1) * PADDING
-    ox = (WINDOW_W - gw) // 2
-    oy = HUD_H + (WINDOW_H - HUD_H - gh) // 2
-
-    cards: list[Card] = []
-    for idx, (suit, rank) in enumerate(deck):
-        col = idx % diff.cols
-        row = idx // diff.cols
-        c   = Card(suit, rank, grid_pos=(col, row))
-        c.rect = pygame.Rect(
-            ox + col * (CARD_W + PADDING),
-            oy + row * (CARD_H + PADDING),
-            CARD_W,
-            CARD_H,
-        )
-        cards.append(c)
-
-    game.start_game(diff, cards)
-    print(f"[INFO] Game started — {diff.label} ({diff.cols}×{diff.rows})")
 
 
 if __name__ == "__main__":
