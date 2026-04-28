@@ -32,12 +32,7 @@ CARD_H   = 120
 PADDING  = 12
 HUD_H    = 60   # height reserved at top for HP bar / score (Jim's HUD area)
 
-# ---------------------------------------------------------------------------
-# TEMP MOCKUP (JAY: REPLACE THIS IN WEEK 2)
-# This allows Jim's visual flip/mismatch animations to be tested.
-# ---------------------------------------------------------------------------
-MISMATCH_TIMER = pygame.USEREVENT + 1
-_face_up: list[Card] = []   # tracks up to 2 face-up cards
+
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +57,7 @@ def main() -> None:
     frame         = 0
 
     running = True
+    dt_ms   = 0.0          # milliseconds since last frame
     while running:
 
         # -------------------------------------------------- events
@@ -75,7 +71,6 @@ def main() -> None:
                 if event.key == pygame.K_ESCAPE:
                     if game.state == GameState.PLAYING:
                         game.to_menu()
-                        _face_up.clear()
                         ui.reset_hp()
                         current_hp    = 100.0
                         current_score = 0
@@ -111,27 +106,19 @@ def main() -> None:
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if game.state == GameState.PLAYING:
-                    # [TEMP MOCKUP] block clicks while mismatch timer runs
-                    if len(_face_up) >= 2:
-                        pass
-                    else:
-                        clicked = game.handle_click(event.pos)
-                        if clicked and not ui.is_flipping(clicked):
+                    clicked = game.handle_click(event.pos)
+                    if clicked and not ui.is_flipping(clicked):
+                        result = game.flip_card(clicked)
+                        if result is not None:
                             ui.start_flip(clicked)
-                            clicked.flip()
-                            _face_up.append(clicked)
-                            if len(_face_up) == 2:
-                                pygame.time.set_timer(MISMATCH_TIMER, 1100, loops=1)
 
-            elif event.type == MISMATCH_TIMER:
-                # [TEMP MOCKUP] auto-flip cards back and deal damage
-                for c in _face_up:
-                    if c.state == CardState.FACE_UP:
-                        ui.trigger_mismatch_flash(c, c)
-                        ui.start_flip(c)
-                        c.flip_back()
-                        current_hp = max(0.0, current_hp - 10.0)
-                _face_up.clear()
+        # -------------------------------------------------- game logic tick
+        mismatched = game.update(dt_ms)
+        if mismatched and len(mismatched) == 2:
+            ui.trigger_mismatch_flash(mismatched[0], mismatched[1])
+            for c in mismatched:
+                ui.start_flip(c)
+            current_hp = max(0.0, current_hp - game.difficulty.hp_penalty)
 
         # -------------------------------------------------- animation ticks
         ui.update_flips()
@@ -170,7 +157,7 @@ def main() -> None:
             screen.blit(hs, hs.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 + 60))
 
         pygame.display.flip()
-        clock.tick(TARGET_FPS)
+        dt_ms = clock.tick(TARGET_FPS)
 
     pygame.quit()
     sys.exit(0)

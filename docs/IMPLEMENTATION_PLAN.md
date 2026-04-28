@@ -51,10 +51,10 @@
 
 ### Jay (Game Logic)
 
-- [ ] Implement card flip logic — clicking a face-down card sets it to face-up; only 2 cards can be flipped per turn
-- [ ] Implement match detection — after 2 cards are flipped, compare their suit+rank; if they match, set both to `matched` state
-- [ ] Implement mismatch handling — if cards don't match, flip both back to face-down after a ~1 second delay
-- [ ] Block input while two unmatched cards are being shown (prevent rapid clicks breaking state)
+- [x] Implement card flip logic — clicking a face-down card sets it to face-up; only 2 cards can be flipped per turn
+- [x] Implement match detection — after 2 cards are flipped, compare their suit+rank; if they match, set both to `matched` state
+- [x] Implement mismatch handling — if cards don't match, flip both back to face-down after a ~1 second delay
+- [x] Block input while two unmatched cards are being shown (prevent rapid clicks breaking state)
 - [ ] Track the number of matched pairs; detect when all pairs are found (win condition trigger)
 - [ ] Wire up the grid shuffle to run fresh on each new game session
 
