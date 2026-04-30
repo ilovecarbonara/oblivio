@@ -55,8 +55,8 @@
 - [x] Implement match detection — after 2 cards are flipped, compare their suit+rank; if they match, set both to `matched` state
 - [x] Implement mismatch handling — if cards don't match, flip both back to face-down after a ~1 second delay
 - [x] Block input while two unmatched cards are being shown (prevent rapid clicks breaking state)
-- [ ] Track the number of matched pairs; detect when all pairs are found (win condition trigger)
-- [ ] Wire up the grid shuffle to run fresh on each new game session
+- [x] Track the number of matched pairs; detect when all pairs are found (win condition trigger)
+- [x] Wire up the grid shuffle to run fresh on each new game session
 
 **Branch:** `week-2/Jay/flip-and-match-logic`
 

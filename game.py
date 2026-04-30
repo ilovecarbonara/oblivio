@@ -20,6 +20,7 @@ from card import Card, CardState
 # ---------------------------------------------------------------------------
 
 MISMATCH_DELAY_MS = 1000.0  # ms to show mismatched cards before flipping back
+WIN_DELAY_MS      = 600.0   # ms to wait after last match before showing WIN screen
 
 
 
@@ -98,6 +99,9 @@ class Game:
         self.flipped_cards   : list[Card]   = []     # up to 2 face-up cards this turn
         self.lock_input      : bool         = False  # True while showing a mismatch
         self.mismatch_timer  : float        = 0.0    # countdown (ms) until flip-back
+        self.matched_pairs   : int          = 0      # number of pairs found so far
+        self._win_pending    : bool         = False  # True when last match found, waiting for anim
+        self._win_delay      : float        = 0.0    # countdown (ms) before WIN transition
 
     # ------------------------------------------------------------------
     # State transitions
@@ -121,6 +125,9 @@ class Game:
         self.flipped_cards.clear()
         self.lock_input      = False
         self.mismatch_timer  = 0.0
+        self.matched_pairs   = 0
+        self._win_pending    = False
+        self._win_delay      = 0.0
 
     def game_over(self) -> None:
         """Transition to the GAME_OVER screen."""
@@ -137,6 +144,9 @@ class Game:
         self.flipped_cards.clear()
         self.lock_input     = False
         self.mismatch_timer = 0.0
+        self.matched_pairs  = 0
+        self._win_pending   = False
+        self._win_delay     = 0.0
 
     # ------------------------------------------------------------------
     # Input handling
@@ -216,8 +226,16 @@ class Game:
         if a.matches(b):
             a.mark_matched()
             b.mark_matched()
-            print(f"[MATCH] {a.rank} of {a.suit}")
+            self.matched_pairs += 1
+            print(f"[MATCH] {a.rank} of {a.suit}  ({self.matched_pairs}/{self.difficulty.pairs})")
             self.flipped_cards.clear()
+
+            # --- Win condition: all pairs found ---
+            if self.matched_pairs >= self.difficulty.pairs:
+                print("[WIN] All pairs matched — waiting for flip animation...")
+                self._win_pending = True
+                self._win_delay   = WIN_DELAY_MS
+
             return "match"
 
         # Mismatch — lock input and start countdown
@@ -242,6 +260,15 @@ class Game:
             expiry, so main.py can trigger UI animations.  Returns
             None on every other frame.
         """
+        # --- Pending win delay (let last flip animation play) ---
+        if self._win_pending:
+            self._win_delay -= dt_ms
+            if self._win_delay <= 0:
+                self._win_pending = False
+                print("[WIN] Transition to WIN screen.")
+                self.win()
+            return None
+
         if not self.lock_input:
             return None
 
