@@ -16,6 +16,16 @@ from card import Card, CardState
 
 
 # ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+MISMATCH_DELAY_MS = 1000.0  # ms to show mismatched cards before flipping back
+WIN_DELAY_MS      = 600.0   # ms to wait after last match before showing WIN screen
+
+
+
+
+# ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
 
@@ -68,20 +78,30 @@ class Game:
     ----------------
     - Hold the current GameState and selected Difficulty.
     - Store the active card grid (list of Card objects).
+    - Track flipped cards (up to 2 per turn) and detect matches.
+    - Handle mismatch delay — lock input, then flip cards back.
     - Route mouse-click events to card hit-testing during PLAYING state.
     - Expose simple transition helpers (start_game, game_over, win, to_menu).
 
     What this class does NOT do
     ---------------------------
     - Rendering (Jim's ui.py)
-    - Grid generation / shuffle (grid.py — Week 1 task excluded per plan)
+    - Grid generation / shuffle (grid.py)
     - HP / score arithmetic (hp_bar.py, score.py — Week 3)
     """
 
     def __init__(self) -> None:
-        self.state      : GameState            = GameState.MENU
-        self.difficulty : Difficulty           = Difficulty.EASY   # default
-        self.cards      : list[Card]           = []                # populated by grid.py
+        self.state           : GameState    = GameState.MENU
+        self.difficulty      : Difficulty   = Difficulty.EASY   # default
+        self.cards           : list[Card]   = []                # populated by grid.py
+
+        # --- Turn / flip tracking (Week 2) ---
+        self.flipped_cards   : list[Card]   = []     # up to 2 face-up cards this turn
+        self.lock_input      : bool         = False  # True while showing a mismatch
+        self.mismatch_timer  : float        = 0.0    # countdown (ms) until flip-back
+        self.matched_pairs   : int          = 0      # number of pairs found so far
+        self._win_pending    : bool         = False  # True when last match found, waiting for anim
+        self._win_delay      : float        = 0.0    # countdown (ms) before WIN transition
 
     # ------------------------------------------------------------------
     # State transitions
@@ -99,9 +119,15 @@ class Game:
             A fully-shuffled, position-assigned list of Card objects
             produced by grid.py.
         """
-        self.difficulty = difficulty
-        self.cards      = cards
-        self.state      = GameState.PLAYING
+        self.difficulty      = difficulty
+        self.cards           = cards
+        self.state           = GameState.PLAYING
+        self.flipped_cards.clear()
+        self.lock_input      = False
+        self.mismatch_timer  = 0.0
+        self.matched_pairs   = 0
+        self._win_pending    = False
+        self._win_delay      = 0.0
 
     def game_over(self) -> None:
         """Transition to the GAME_OVER screen."""
@@ -113,8 +139,14 @@ class Game:
 
     def to_menu(self) -> None:
         """Return to the main menu and clear board state."""
-        self.state = GameState.MENU
-        self.cards = []
+        self.state          = GameState.MENU
+        self.cards          = []
+        self.flipped_cards.clear()
+        self.lock_input     = False
+        self.mismatch_timer = 0.0
+        self.matched_pairs  = 0
+        self._win_pending   = False
+        self._win_delay     = 0.0
 
     # ------------------------------------------------------------------
     # Input handling
@@ -124,17 +156,9 @@ class Game:
         """
         Translate a mouse-click position into a card.
 
-        Iterates over all cards and returns the first face-down card
-        whose rect contains *mouse_pos*.  Returns None if:
-            - The game is not in PLAYING state.
-            - No face-down card occupies the clicked position.
-
-        Notes
-        -----
-        Only FACE_DOWN cards are eligible to be clicked — clicking on
-        a face-up or matched card is intentionally ignored here.  The
-        caller (main.py game loop) decides what to do with the returned
-        card (e.g. flip it, check for a match).
+        Returns the first face-down card whose rect contains *mouse_pos*.
+        Returns None if the game is not in PLAYING state, input is locked
+        (mismatch delay), or no eligible card occupies the position.
 
         Parameters
         ----------
@@ -145,7 +169,7 @@ class Game:
         -------
         Card | None
         """
-        if self.state != GameState.PLAYING:
+        if self.state != GameState.PLAYING or self.lock_input:
             return None
 
         for card in self.cards:
@@ -157,6 +181,108 @@ class Game:
                 return card
 
         return None
+
+    # ------------------------------------------------------------------
+    # Card flip / match logic (Week 2)
+    # ------------------------------------------------------------------
+
+    def flip_card(self, card: Card) -> Optional[str]:
+        """
+        Attempt to flip a face-down card and evaluate the turn.
+
+        Call this after handle_click() returns a card.  The method
+        flips the card to FACE_UP and, once two cards are revealed,
+        checks for a match or starts the mismatch timer.
+
+        Parameters
+        ----------
+        card : Card
+            The card to flip (must currently be FACE_DOWN).
+
+        Returns
+        -------
+        str | None
+            ``"flip"``     — first card of the turn was flipped.
+            ``"match"``    — second card flipped and it matches the first.
+            ``"mismatch"`` — second card flipped, no match; timer started.
+            ``None``       — flip rejected (wrong state, locked, etc.).
+        """
+        if self.state != GameState.PLAYING or self.lock_input:
+            return None
+        if card.state != CardState.FACE_DOWN:
+            return None
+        if card in self.flipped_cards:
+            return None
+
+        card.flip()
+        self.flipped_cards.append(card)
+
+        if len(self.flipped_cards) < 2:
+            return "flip"
+
+        # --- Two cards revealed: evaluate ---
+        a, b = self.flipped_cards
+
+        if a.matches(b):
+            a.mark_matched()
+            b.mark_matched()
+            self.matched_pairs += 1
+            print(f"[MATCH] {a.rank} of {a.suit}  ({self.matched_pairs}/{self.difficulty.pairs})")
+            self.flipped_cards.clear()
+
+            # --- Win condition: all pairs found ---
+            if self.matched_pairs >= self.difficulty.pairs:
+                print("[WIN] All pairs matched — waiting for flip animation...")
+                self._win_pending = True
+                self._win_delay   = WIN_DELAY_MS
+
+            return "match"
+
+        # Mismatch — lock input and start countdown
+        print(f"[MISMATCH] {a.rank} of {a.suit} vs {b.rank} of {b.suit}")
+        self.lock_input     = True
+        self.mismatch_timer = MISMATCH_DELAY_MS
+        return "mismatch"
+
+    def update(self, dt_ms: float) -> Optional[list[Card]]:
+        """
+        Per-frame update.  Manages the mismatch countdown timer.
+
+        Parameters
+        ----------
+        dt_ms : float
+            Milliseconds elapsed since the last frame.
+
+        Returns
+        -------
+        list[Card] | None
+            The two cards that were just flipped back on mismatch
+            expiry, so main.py can trigger UI animations.  Returns
+            None on every other frame.
+        """
+        # --- Pending win delay (let last flip animation play) ---
+        if self._win_pending:
+            self._win_delay -= dt_ms
+            if self._win_delay <= 0:
+                self._win_pending = False
+                print("[WIN] Transition to WIN screen.")
+                self.win()
+            return None
+
+        if not self.lock_input:
+            return None
+
+        self.mismatch_timer -= dt_ms
+        if self.mismatch_timer > 0:
+            return None
+
+        # Timer expired — flip both cards back
+        mismatched = list(self.flipped_cards)
+        for c in self.flipped_cards:
+            c.flip_back()
+        self.flipped_cards.clear()
+        self.lock_input = False
+        return mismatched
 
     # ------------------------------------------------------------------
     # Debug
