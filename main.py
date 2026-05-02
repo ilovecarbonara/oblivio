@@ -52,8 +52,6 @@ def main() -> None:
 
     game          = Game()   # starts in MENU state
     menu_selected = 0        # 0=PLAY  1=QUIT
-    current_hp    = 100.0
-    current_score = 0
     frame         = 0
 
     running = True
@@ -72,8 +70,6 @@ def main() -> None:
                     if game.state == GameState.PLAYING:
                         game.to_menu()
                         ui.reset_hp()
-                        current_hp    = 100.0
-                        current_score = 0
                     else:
                         running = False
 
@@ -90,9 +86,6 @@ def main() -> None:
                         if menu_selected == 1:   # QUIT
                             running = False
                         else:                    # PLAY
-                            current_hp    = 100.0
-                            current_score = 0
-                            
                             diff = Difficulty.EASY
                             grid_w = diff.cols * CARD_W + (diff.cols - 1) * PADDING
                             grid_h = diff.rows * CARD_H + (diff.rows - 1) * PADDING
@@ -118,7 +111,6 @@ def main() -> None:
             ui.trigger_mismatch_flash(mismatched[0], mismatched[1])
             for c in mismatched:
                 ui.start_flip(c)
-            current_hp = max(0.0, current_hp - game.difficulty.hp_penalty)
 
         # -------------------------------------------------- animation ticks
         ui.update_flips()
@@ -132,7 +124,7 @@ def main() -> None:
 
         elif game.state == GameState.PLAYING:
             ui.draw_game_bg(screen, frame // 4)   # slow spin behind cards
-            ui.draw_hud(screen, current_hp, current_score, HUD_H, frame)
+            ui.draw_hud(screen, game.hp.current_hp, game.score.total, HUD_H, frame)
             ui.draw_card_grid(screen, game.cards, CARD_W, CARD_H)
             ui.draw_esc_hint(screen)
 
@@ -152,7 +144,9 @@ def main() -> None:
             label = "GAME OVER" if game.state == GameState.GAME_OVER else "YOU WIN!"
             color = (200, 40, 40) if game.state == GameState.GAME_OVER else (232, 24, 90)
             ts    = big.render(label, False, color)
-            screen.blit(ts, ts.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2))
+            screen.blit(ts, ts.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 - 20))
+            sc = sml.render(f"SCORE: {game.score.total}", False, (200, 200, 200))
+            screen.blit(sc, sc.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 + 20))
             hs = sml.render("ESC - MAIN MENU", False, (80, 60, 100))
             screen.blit(hs, hs.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 + 60))
 
