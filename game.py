@@ -13,6 +13,8 @@ from typing import Optional
 import pygame
 
 from card import Card, CardState
+from hp_bar import HPBar
+from score import Score
 
 
 # ---------------------------------------------------------------------------
@@ -31,10 +33,11 @@ WIN_DELAY_MS      = 600.0   # ms to wait after last match before showing WIN scr
 
 class GameState(Enum):
     """Top-level states the game can be in."""
-    MENU      = auto()   # Main menu is visible
-    PLAYING   = auto()   # Active gameplay
-    GAME_OVER = auto()   # HP reached 0
-    WIN       = auto()   # All pairs matched
+    MENU        = auto()   # Main menu is visible
+    GRID_SELECT = auto()   # Selecting difficulty
+    PLAYING     = auto()   # Active gameplay
+    GAME_OVER   = auto()   # HP reached 0
+    WIN         = auto()   # All pairs matched
 
 
 class Difficulty(Enum):
@@ -87,7 +90,7 @@ class Game:
     ---------------------------
     - Rendering (Jim's ui.py)
     - Grid generation / shuffle (grid.py)
-    - HP / score arithmetic (hp_bar.py, score.py — Week 3)
+    - HP / score arithmetic (hp_bar.py, score.py)
     """
 
     def __init__(self) -> None:
@@ -102,6 +105,11 @@ class Game:
         self.matched_pairs   : int          = 0      # number of pairs found so far
         self._win_pending    : bool         = False  # True when last match found, waiting for anim
         self._win_delay      : float        = 0.0    # countdown (ms) before WIN transition
+
+        # --- HP & scoring (Week 3) ---
+        self.hp              : HPBar        = HPBar()
+        self.score           : Score        = Score()
+        self._turn_start_ticks: int         = 0      # pygame ticks when 1st card flipped
 
     # ------------------------------------------------------------------
     # State transitions
@@ -128,6 +136,9 @@ class Game:
         self.matched_pairs   = 0
         self._win_pending    = False
         self._win_delay      = 0.0
+        self.hp              = HPBar()
+        self.score           = Score()
+        self._turn_start_ticks = 0
 
     def game_over(self) -> None:
         """Transition to the GAME_OVER screen."""
@@ -136,6 +147,10 @@ class Game:
     def win(self) -> None:
         """Transition to the WIN screen."""
         self.state = GameState.WIN
+
+    def to_grid_select(self) -> None:
+        """Transition to the GRID_SELECT screen."""
+        self.state = GameState.GRID_SELECT
 
     def to_menu(self) -> None:
         """Return to the main menu and clear board state."""
@@ -147,6 +162,9 @@ class Game:
         self.matched_pairs  = 0
         self._win_pending   = False
         self._win_delay     = 0.0
+        self.hp             = HPBar()
+        self.score          = Score()
+        self._turn_start_ticks = 0
 
     # ------------------------------------------------------------------
     # Input handling
@@ -218,6 +236,7 @@ class Game:
         self.flipped_cards.append(card)
 
         if len(self.flipped_cards) < 2:
+            self._turn_start_ticks = pygame.time.get_ticks()
             return "flip"
 
         # --- Two cards revealed: evaluate ---
@@ -227,7 +246,17 @@ class Game:
             a.mark_matched()
             b.mark_matched()
             self.matched_pairs += 1
-            print(f"[MATCH] {a.rank} of {a.suit}  ({self.matched_pairs}/{self.difficulty.pairs})")
+
+            # --- Score calculation (Week 3) ---
+            elapsed_ms = pygame.time.get_ticks() - self._turn_start_ticks
+            elapsed_s  = elapsed_ms / 1000.0
+            earned     = self.score.add_match(elapsed_s)
+
+            print(
+                f"[MATCH] {a.rank} of {a.suit}  "
+                f"({self.matched_pairs}/{self.difficulty.pairs})  "
+                f"+{earned} pts ({elapsed_s:.2f}s)"
+            )
             self.flipped_cards.clear()
 
             # --- Win condition: all pairs found ---
@@ -238,8 +267,12 @@ class Game:
 
             return "match"
 
-        # Mismatch — lock input and start countdown
-        print(f"[MISMATCH] {a.rank} of {a.suit} vs {b.rank} of {b.suit}")
+        # Mismatch — lock input, deduct HP, start countdown
+        self.hp.deduct(self.difficulty.hp_penalty)
+        print(
+            f"[MISMATCH] {a.rank} of {a.suit} vs {b.rank} of {b.suit}  "
+            f"HP: {self.hp.current_hp}/{HPBar.MAX_HP} (\u2212{self.difficulty.hp_penalty})"
+        )
         self.lock_input     = True
         self.mismatch_timer = MISMATCH_DELAY_MS
         return "mismatch"
@@ -282,6 +315,12 @@ class Game:
             c.flip_back()
         self.flipped_cards.clear()
         self.lock_input = False
+
+        # --- Game-over check (Week 3) ---
+        if self.hp.is_depleted:
+            print(f"[GAME OVER] HP depleted — final score: {self.score.total}")
+            self.game_over()
+
         return mismatched
 
     # ------------------------------------------------------------------
