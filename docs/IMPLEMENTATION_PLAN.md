@@ -85,12 +85,12 @@
 
 ### Jay (Game Logic)
 
-- [ ] Implement the HP system in `hp_bar.py` — start at 100 HP, deduct on mismatch based on difficulty (Easy: −10, Medium: −15, Hard: −20)
-- [ ] Trigger game-over state when HP reaches 0
-- [ ] Implement the scoring system in `score.py` — award 100 base points per match, plus speed bonus (under 1s: +50, 1–2s: +25, 2–4s: +10, over 4s: +0)
-- [ ] Start a per-turn timer when the first card of a pair is flipped; stop it when the second card is flipped
-- [ ] Implement game state transitions in `game.py`: MENU → GRID_SELECT → PLAYING → GAME_OVER or WIN → back to MENU
-- [ ] Wire "Play Again" (restart same difficulty) and "Main Menu" (go back to menu) actions from the result screens
+- [x] Implement the HP system in `hp_bar.py` — start at 100 HP, deduct on mismatch based on difficulty (Easy: −10, Medium: −15, Hard: −20)
+- [x] Trigger game-over state when HP reaches 0
+- [x] Implement the scoring system in `score.py` — award 100 base points per match, plus speed bonus (under 1s: +50, 1–2s: +25, 2–4s: +10, over 4s: +0)
+- [x] Start a per-turn timer when the first card of a pair is flipped; stop it when the second card is flipped
+- [x] Implement game state transitions in `game.py`: MENU → GRID_SELECT → PLAYING → GAME_OVER or WIN → back to MENU
+- [x] Wire "Play Again" (restart same difficulty) and "Main Menu" (go back to menu) actions from the result screens
 
 **Branch:** `week-3/Jay/hp-scoring-and-states`
 

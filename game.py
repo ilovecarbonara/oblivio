@@ -33,10 +33,11 @@ WIN_DELAY_MS      = 600.0   # ms to wait after last match before showing WIN scr
 
 class GameState(Enum):
     """Top-level states the game can be in."""
-    MENU      = auto()   # Main menu is visible
-    PLAYING   = auto()   # Active gameplay
-    GAME_OVER = auto()   # HP reached 0
-    WIN       = auto()   # All pairs matched
+    MENU        = auto()   # Main menu is visible
+    GRID_SELECT = auto()   # Selecting difficulty
+    PLAYING     = auto()   # Active gameplay
+    GAME_OVER   = auto()   # HP reached 0
+    WIN         = auto()   # All pairs matched
 
 
 class Difficulty(Enum):
@@ -146,6 +147,10 @@ class Game:
     def win(self) -> None:
         """Transition to the WIN screen."""
         self.state = GameState.WIN
+
+    def to_grid_select(self) -> None:
+        """Transition to the GRID_SELECT screen."""
+        self.state = GameState.GRID_SELECT
 
     def to_menu(self) -> None:
         """Return to the main menu and clear board state."""
