@@ -173,27 +173,32 @@ def main() -> None:
             ui.draw_esc_hint(screen)
 
         elif game.state == GameState.GRID_SELECT:
-            # Week 3 Jim screen replaces this placeholder
-            screen.fill((10, 6, 24))
-            try:
-                from pygame.font import Font as _F
-                import os
-                _fp = os.path.join("assets", "PressStart2P.ttf")
-                big  = _F(_fp, 20) if os.path.exists(_fp) else pygame.font.SysFont("couriernew", 28, bold=True)
-                sml  = _F(_fp, 10) if os.path.exists(_fp) else pygame.font.SysFont("couriernew", 14)
-            except Exception:
-                big  = pygame.font.SysFont("couriernew", 28, bold=True)
-                sml  = pygame.font.SysFont("couriernew", 14)
+            # [TEMP MOCKUP — JAY: Replace with full screen in Week 3]
+            ui.draw_game_bg(screen, frame // 4)
+            heading_font = ui.get_gothic_font(36)
+            item_font    = ui.get_gothic_font(24)
 
-            ts = big.render("SELECT DIFFICULTY", False, (255, 255, 255))
-            screen.blit(ts, ts.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 - 60))
+            hd = heading_font.render("SELECT DIFFICULTY", False, (255, 255, 255))
+            screen.blit(hd, hd.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 - 120))
 
-            diffs = ["Easy (4x4)", "Medium (6x6)", "Hard (8x8)"]
+            # Separator lines
+            sep_y = WINDOW_H // 2 - 75
+            pygame.draw.line(screen, (243, 2, 97), (WINDOW_W // 2 - 240, sep_y), (WINDOW_W // 2 + 240, sep_y), 2)
+
+            diffs = ["Easy  (4x4)", "Medium  (6x6)", "Hard  (8x8)"]
             for i, d in enumerate(diffs):
-                color = (243, 2, 97) if i == grid_selected else (90, 70, 100)
-                text = f"> {d} <" if i == grid_selected else d
-                ds = sml.render(text, False, color)
-                screen.blit(ds, ds.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 + i * 30))
+                is_sel = (i == grid_selected)
+                color  = (243, 2, 97) if is_sel else (90, 70, 100)
+                label  = f"> {d} <" if is_sel else d
+                ds = item_font.render(label, False, color)
+                dy = WINDOW_H // 2 - 20 + i * 60
+                if is_sel:
+                    box = pygame.Rect(WINDOW_W // 2 - ds.get_width() // 2 - 20,
+                                      dy - ds.get_height() // 2 - 8,
+                                      ds.get_width() + 40, ds.get_height() + 16)
+                    pygame.draw.rect(screen, (25, 2, 14), box)
+                    pygame.draw.rect(screen, (243, 2, 97), box, 2)
+                screen.blit(ds, ds.get_rect(centerx=WINDOW_W // 2, centery=dy))
 
         elif game.state in (GameState.GAME_OVER, GameState.WIN):
             # Week 3 Jim screens replace this placeholder
