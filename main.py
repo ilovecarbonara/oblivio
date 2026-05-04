@@ -7,6 +7,7 @@ Rendering is delegated to Jim's ui.py (low-res pixel canvas system).
 Owner: Jay (game logic) / Jim (ui.py wiring)
 """
 
+import os
 import sys
 import pygame
 
@@ -63,9 +64,16 @@ def get_grid_layout(diff: Difficulty) -> tuple[int, int, tuple[int, int]]:
 
 def main() -> None:
     pygame.init()
+    pygame.mixer.init()
     pygame.display.set_caption(WINDOW_TITLE)
     screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
     clock  = pygame.time.Clock()
+
+    # BGM path
+    _BGM_MENU = os.path.join(
+        os.path.dirname(__file__), "game-assets", "music", "Tetuano_menuBGM.mp3"
+    )
+    _music_state = None   # tracks what's currently playing: "menu" | "game" | None
 
     # Load all UI assets
     ui.load_fonts()
@@ -153,6 +161,7 @@ def main() -> None:
         mismatched = game.update(dt_ms)
         if mismatched and len(mismatched) == 2:
             ui.trigger_mismatch_flash(mismatched[0], mismatched[1])
+            ui.trigger_screen_shake()          # screen-shake hit effect
             for c in mismatched:
                 ui.start_flip(c)
 
@@ -160,7 +169,21 @@ def main() -> None:
         ui.update_flips()
         ui.update_mismatch_flash()
         ui.update_match_pulse()
+        ui.update_screen_shake()
         frame += 1
+
+        # -------------------------------------------------- BGM management
+        if game.state in (GameState.MENU, GameState.GRID_SELECT):
+            if _music_state != "menu":
+                _music_state = "menu"
+                if os.path.exists(_BGM_MENU):
+                    pygame.mixer.music.load(_BGM_MENU)
+                    pygame.mixer.music.set_volume(0.6)
+                    pygame.mixer.music.play(-1)   # -1 = loop forever
+        else:
+            if _music_state == "menu":
+                _music_state = "game"
+                pygame.mixer.music.stop()
 
         # -------------------------------------------------- render
         if game.state == GameState.MENU:
@@ -169,38 +192,55 @@ def main() -> None:
         elif game.state == GameState.PLAYING:
             ui.draw_game_bg(screen, frame // 4)   # slow spin behind cards
             ui.draw_hud(screen, game.hp.current_hp, game.score.total, HUD_H, frame)
+
+            # Hover detection — find which face-down card the mouse is over
+            mx, my = pygame.mouse.get_pos()
+            hovered = None
+            if not game.lock_input:
+                for c in game.cards:
+                    if c.rect.collidepoint(mx, my):
+                        from card import CardState
+                        if c.state == CardState.FACE_DOWN:
+                            hovered = c
+                        break
+            ui.set_hovered(hovered)
+
             ui.draw_card_grid(screen, game.cards, current_cw, current_ch)
             ui.draw_esc_hint(screen)
 
         elif game.state == GameState.GRID_SELECT:
-            # Week 3 Jim screen replaces this placeholder
-            screen.fill((10, 6, 24))
-            try:
-                from pygame.font import Font as _F
-                import os
-                _fp = os.path.join("assets", "PressStart2P.ttf")
-                big  = _F(_fp, 20) if os.path.exists(_fp) else pygame.font.SysFont("couriernew", 28, bold=True)
-                sml  = _F(_fp, 10) if os.path.exists(_fp) else pygame.font.SysFont("couriernew", 14)
-            except Exception:
-                big  = pygame.font.SysFont("couriernew", 28, bold=True)
-                sml  = pygame.font.SysFont("couriernew", 14)
+            # [TEMP MOCKUP — JAY: Replace with full screen in Week 3]
+            ui.draw_game_bg(screen, frame // 4)
+            heading_font = ui.get_gothic_font(36)
+            item_font    = ui.get_gothic_font(24)
 
-            ts = big.render("SELECT DIFFICULTY", False, (255, 255, 255))
-            screen.blit(ts, ts.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 - 60))
+            hd = heading_font.render("SELECT DIFFICULTY", False, (255, 255, 255))
+            screen.blit(hd, hd.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 - 120))
 
-            diffs = ["Easy (4x4)", "Medium (6x6)", "Hard (8x8)"]
+            # Separator lines
+            sep_y = WINDOW_H // 2 - 75
+            pygame.draw.line(screen, (243, 2, 97), (WINDOW_W // 2 - 240, sep_y), (WINDOW_W // 2 + 240, sep_y), 2)
+
+            diffs = ["Easy  (4x4)", "Medium  (6x6)", "Hard  (8x8)"]
             for i, d in enumerate(diffs):
-                color = (243, 2, 97) if i == grid_selected else (90, 70, 100)
-                text = f"> {d} <" if i == grid_selected else d
-                ds = sml.render(text, False, color)
-                screen.blit(ds, ds.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 + i * 30))
+                is_sel = (i == grid_selected)
+                color  = (243, 2, 97) if is_sel else (90, 70, 100)
+                label  = f"> {d} <" if is_sel else d
+                ds = item_font.render(label, False, color)
+                dy = WINDOW_H // 2 - 20 + i * 60
+                if is_sel:
+                    box = pygame.Rect(WINDOW_W // 2 - ds.get_width() // 2 - 20,
+                                      dy - ds.get_height() // 2 - 8,
+                                      ds.get_width() + 40, ds.get_height() + 16)
+                    pygame.draw.rect(screen, (25, 2, 14), box)
+                    pygame.draw.rect(screen, (243, 2, 97), box, 2)
+                screen.blit(ds, ds.get_rect(centerx=WINDOW_W // 2, centery=dy))
 
         elif game.state in (GameState.GAME_OVER, GameState.WIN):
             # Week 3 Jim screens replace this placeholder
             screen.fill((10, 6, 24))
             try:
                 from pygame.font import Font as _F
-                import os
                 _fp = os.path.join("assets", "PressStart2P.ttf")
                 big  = _F(_fp, 20) if os.path.exists(_fp) else pygame.font.SysFont("couriernew", 28, bold=True)
                 sml  = _F(_fp, 10) if os.path.exists(_fp) else pygame.font.SysFont("couriernew", 14)
@@ -221,6 +261,13 @@ def main() -> None:
                 text = f"> {o} <" if i == result_selected else o
                 os_surf = sml.render(text, False, color)
                 screen.blit(os_surf, os_surf.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 + 60 + i * 30))
+
+        # Screen shake post-process — shift entire frame then black-fill edges
+        ox, oy = ui.get_screen_shake_offset()
+        if ox != 0 or oy != 0:
+            snap = screen.copy()
+            screen.fill((0, 0, 0))
+            screen.blit(snap, (ox, oy))
 
         pygame.display.flip()
         dt_ms = clock.tick(TARGET_FPS)

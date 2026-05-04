@@ -62,12 +62,17 @@
 
 ### Jim (Visuals / UI)
 
-- [ ] Render face-up cards using the correct sprite for each card's suit and rank
-- [ ] Visually distinguish the three card states: face-down (card back), face-up (card front), matched (card front + glow/highlight border)
-- [ ] Add a brief visual indicator for mismatches before cards flip back (e.g., red tint or shake)
+- [x] Render face-up cards using the correct sprite for each card's suit and rank
+- [x] Visually distinguish the three card states: face-down (card back), face-up (card front), matched (card front + glow/highlight border)
+- [x] Add a brief visual indicator for mismatches before cards flip back (e.g., red tint or shake)
 - [ ] Ensure the grid is centered on screen and cards are evenly spaced for all three grid sizes (4×4, 6×6, 8×8)
 - [ ] Add card hover effect (subtle highlight or cursor change when hovering over a clickable card)
 - [ ] Source and implement a final custom font that better matches the dark retro-horror theme (replacing the system fallback)
+- [ ] Source and implement a new pixelate visual effect for matched cards (replacing the magenta pulse)
+- [ ] Source a new, dynamic health bar asset
+- [ ] Redesign and fancy-up the live scoreboard UI
+- [ ] **[Moved from Jay's W4]** Source audio assets: BGM (Menu & In-game)
+- [ ] Source an updated, more legible pixel art card sprite sheet (current numbers are hard to read)
 
 **Branch:** `week-2/Jim/card-visuals-and-states`
 
@@ -120,7 +125,7 @@
 
 ### Jay (Game Logic)
 
-- [ ] Source audio assets: BGM (chiptune loop), SFX (card flip, match, mismatch, game over jingle, win jingle) from OpenGameArt / freesound.org
+- [ ] **[Moved to Jim W2]** ~~Source audio assets: BGM and SFX~~
 - [ ] Set up `assets/audio/` with sourced files (`.ogg` or `.wav` for SFX, `.ogg` or `.mp3` for BGM)
 - [ ] Implement audio playback — load and play BGM on loop during gameplay, trigger SFX on events (flip, match, mismatch, game over, win)
 - [ ] Play-test all three difficulty levels end-to-end; note and fix bugs
@@ -131,12 +136,13 @@
 
 ### Jim (Visuals / UI)
 
-- [ ] Implement **card flip animation** — horizontal scale tween using `pygame.transform.scale()`: shrink width to 0, swap image, expand width back to full (~8–10 frames each phase)
-- [ ] Implement **match pulse animation** — matched cards flash a highlight border 2–3 times over ~0.5 seconds
-- [ ] Implement **HP bar smooth decrease** — interpolate the bar width toward the target value over ~0.3 seconds on mismatch
+- [x] Implement **card flip animation** — horizontal scale tween using `pygame.transform.scale()`: shrink width to 0, swap image, expand width back to full (~8–10 frames each phase)
+- [x] Implement **match pulse animation** — matched cards flash a highlight border 2–3 times over ~0.5 seconds
+- [x] Implement **HP bar smooth decrease** — interpolate the bar width toward the target value over ~0.3 seconds on mismatch
 - [ ] Implement **screen transition** (fade-to-black) — draw a black overlay with increasing alpha (0 → 255) over ~0.5 seconds before switching to Game Over / Win screen
 - [ ] Final visual polish — make sure all sprites align, fonts are consistent, colors match the style guide
 - [ ] Confirm fixed window size (no resizing allowed)
+- [ ] Source and implement SFX audio assets (flip, match, mismatch)
 
 **Branch:** `week-4/Jim/animations-and-polish`
 

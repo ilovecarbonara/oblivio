@@ -29,7 +29,8 @@ SCALE   = 4     # upscale factor  →  1024 × 768 output
 # ---------------------------------------------------------------------------
 _HERE      = os.path.dirname(__file__)
 _BASE      = os.path.join(_HERE, "game-assets", "sprites")
-_CARDS     = os.path.join(_BASE, "CARDS", "Cards", "Dark", "Separated-Cards PNG")
+_CARDS_PNG = os.path.join(_BASE, "CARDS", "FantasyCards", "FantasyCards.png")
+_CARD_BACK = os.path.join(_BASE, "CARDS", "FantasyCards", "Backsides", "DefaultFantasy.png")
 _HEALTH_PX = os.path.join(_BASE, "HEALTH", "Pixelated")   # new pixelated bar
 
 # ---------------------------------------------------------------------------
@@ -53,13 +54,39 @@ C_HUD_BG    = (  7,   3,  14)   # HUD strip background
 _font_title: pygame.font.Font | None = None
 _font_lg:    pygame.font.Font | None = None
 _font_sm:    pygame.font.Font | None = None
+_font_cache: dict[int, pygame.font.Font] = {}
+_title_cache: dict[int, pygame.font.Font] = {}
+
+
+def get_gothic_font(size: int) -> pygame.font.Font:
+    """Load or retrieve a cached size of PixeloidSans-Bold (menus/HUD)."""
+    if size not in _font_cache:
+        path = os.path.join(_HERE, "game-assets", "fonts", "Pixeloid", "TrueType (.ttf)", "PixeloidSans-Bold.ttf")
+        if os.path.exists(path):
+            _font_cache[size] = pygame.font.Font(path, size)
+        else:
+            _font_cache[size] = pygame.font.SysFont("couriernew", size, bold=True)
+    return _font_cache[size]
+
+
+def get_title_font(size: int) -> pygame.font.Font:
+    """Load or retrieve a cached size of GothicByte (title only — eerie feel)."""
+    if size not in _title_cache:
+        path = os.path.join(_HERE, "game-assets", "fonts", "GothicByte.ttf")
+        if os.path.exists(path):
+            _title_cache[size] = pygame.font.Font(path, size)
+        else:
+            _title_cache[size] = pygame.font.SysFont("couriernew", size, bold=True)
+    return _title_cache[size]
 
 
 def load_fonts() -> None:
     global _font_title, _font_lg, _font_sm
-    _font_title = pygame.font.SysFont("couriernew", 20, bold=True)
-    _font_lg    = pygame.font.SysFont("couriernew", 10, bold=True)
-    _font_sm    = pygame.font.SysFont("couriernew",  7, bold=False)
+    # Title uses Pixeloid (reverting — sourcing a better font soon)
+    _font_title = get_gothic_font(96)
+    # Menus/HUD use PixeloidSans-Bold for clean readability
+    _font_lg    = get_gothic_font(36)
+    _font_sm    = get_gothic_font(22)
 
 
 # ---------------------------------------------------------------------------
@@ -197,33 +224,49 @@ def _tick_hp() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Card sprite mapping
+# Card sprite mapping (FantasyCards.png)
+# 
+# Sheet layout: 13 columns (A, 2-10, J, Q, K), 4 rows.
+# Card size: 23x35 px, with 1px transparent gap (stride is 24x36).
+# 
+# Rows (based on visual icons):
+# 0: Spades (Red Sword)
+# 1: Clubs (White Skull)
+# 2: Diamonds (White Spark)
+# 3: Hearts (Red Shield)
 # ---------------------------------------------------------------------------
 _RANKS      = ("A","2","3","4","5","6","7","8","9","10","J","Q","K")
-_SUIT_START = {"Hearts": 9, "Diamonds": 22, "Clubs": 35, "Spades": 48}
-CARD_BACK_IDX = 1
+_SUIT_ROW   = {"Spades": 0, "Clubs": 1, "Diamonds": 2, "Hearts": 3}
 
-_card_sprites: dict[int, pygame.Surface] = {}
+_card_sprites: dict[str, pygame.Surface] = {}
+_card_back: pygame.Surface | None = None
 
 
 def load_card_sprites() -> None:
+    global _card_back
     _card_sprites.clear()
-    for i in range(1, 65):
-        path = os.path.join(_CARDS, f"cardsDark{i}.png")
-        if os.path.exists(path):
-            _card_sprites[i] = pygame.image.load(path).convert_alpha()
-
-
-def _card_idx(suit: str, rank: str) -> int:
-    return _SUIT_START[suit] + _RANKS.index(rank)
+    
+    if os.path.exists(_CARDS_PNG):
+        sheet = pygame.image.load(_CARDS_PNG).convert_alpha()
+        for suit, row_idx in _SUIT_ROW.items():
+            for rank_idx, rank in enumerate(_RANKS):
+                x = rank_idx * 24
+                y = row_idx * 36
+                surf = sheet.subsurface(pygame.Rect(x, y, 23, 35))
+                _card_sprites[f"{suit}_{rank}"] = surf.copy()
+    else:
+        print(f"[WARN] Card sheet not found: {_CARDS_PNG}")
+        
+    if os.path.exists(_CARD_BACK):
+        _card_back = pygame.image.load(_CARD_BACK).convert_alpha()
 
 
 def get_card_surf(suit: str, rank: str) -> pygame.Surface | None:
-    return _card_sprites.get(_card_idx(suit, rank))
+    return _card_sprites.get(f"{suit}_{rank}")
 
 
 def get_back_surf() -> pygame.Surface | None:
-    return _card_sprites.get(CARD_BACK_IDX)
+    return _card_back
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +310,7 @@ def _flip_scale(card) -> float:
 # ---------------------------------------------------------------------------
 # Mismatch flash
 # ---------------------------------------------------------------------------
-_flash: dict[int, float] = {}
+_flash:  dict[int, float] = {}
 FLASH_FRAMES = 24
 
 
@@ -284,6 +327,36 @@ def update_mismatch_flash(dt: float = 1.0) -> None:
             done.append(cid)
     for cid in done:
         del _flash[cid]
+
+
+# ---------------------------------------------------------------------------
+# Screen shake  —  triggered on mismatch, replaces per-card shake
+# ---------------------------------------------------------------------------
+_shake_frames: int = 0
+_SHAKE_MAX:    int = 18     # frames of shake duration
+_SHAKE_AMP:    int = 14     # max pixel displacement
+
+
+def trigger_screen_shake() -> None:
+    """Call on mismatch to start a screen shake hit."""
+    global _shake_frames
+    _shake_frames = _SHAKE_MAX
+
+
+def update_screen_shake() -> None:
+    global _shake_frames
+    if _shake_frames > 0:
+        _shake_frames -= 1
+
+
+def get_screen_shake_offset() -> tuple[int, int]:
+    """Returns (ox, oy) pixel offset to apply to the whole screen this frame."""
+    if _shake_frames <= 0:
+        return (0, 0)
+    t  = _shake_frames / _SHAKE_MAX   # 1.0 → 0.0  (trauma envelope)
+    ox = int(_SHAKE_AMP * t * math.sin(_shake_frames * 2.5))
+    oy = int(_SHAKE_AMP * 0.5 * t * math.sin(_shake_frames * 1.8 + 0.8))
+    return (ox, oy)
 
 
 # ---------------------------------------------------------------------------
@@ -323,55 +396,75 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     """
     c = get_canvas()
     draw_creepy_void(c, frame)
+    blit_canvas_to_screen(screen)  # chunky void background first
 
     if _font_title is None or _font_lg is None or _font_sm is None:
-        blit_canvas_to_screen(screen)
         return
 
-    cx = PIXEL_W // 2
-    ty = 44
+    w  = screen.get_width()
+    h  = screen.get_height()
+    cx = w // 2
+    ty = 130   # title vertical center on the 1024x768 screen
 
-    # ── OBLIVIO title ──────────────────────────────────────────────────────
-    # Step 1: deep blood-red shadow at +1,+1 offset (gives weight/menace)
-    shadow = _font_title.render("OBLIVIO", False, C_ACCENT_DK)
-    c.blit(shadow, shadow.get_rect(centerx=cx + 1, centery=ty + 1))
-        
-    # Step 2: Neon Magenta title on top
-    title = _font_title.render("OBLIVIO", False, C_ACCENT)
-    c.blit(title, title.get_rect(centerx=cx, centery=ty))
+    # ── OBLIVIO title — 3-layer extruded pixel-art style ──────────────────
+    C_DEPTH   = (45, 10, 90)      # deep indigo-purple block depth
+    C_OUTLINE = (255, 255, 255)   # stark white outline
+    DEPTH     = 10                # px of 3D block shadow
+    OUTLINE   = 3                 # outline thickness
 
-    # ── Accent separator lines ─────────────────────────────────────────────
-    sep_y = ty + 18
-    pygame.draw.line(c, C_ACCENT, (cx - 70, sep_y), (cx - 12, sep_y), 1)
-    pygame.draw.line(c, C_ACCENT, (cx + 12, sep_y), (cx + 70, sep_y), 1)
+    depth_surf   = _font_title.render("OBLIVIO", False, C_DEPTH)
+    outline_surf = _font_title.render("OBLIVIO", False, C_OUTLINE)
+    title_surf   = _font_title.render("OBLIVIO", False, C_ACCENT)
+    title_rect   = title_surf.get_rect(centerx=cx, centery=ty)
+
+    # Step 1: stacked purple copies for the 3D block depth (down-right)
+    for d in range(DEPTH, 0, -1):
+        dr = depth_surf.get_rect(centerx=cx + d, centery=ty + d)
+        screen.blit(depth_surf, dr)
+
+    # Step 2: white outline — blit white text in every direction
+    for ox in range(-OUTLINE, OUTLINE + 1):
+        for oy in range(-OUTLINE, OUTLINE + 1):
+            if ox == 0 and oy == 0:
+                continue
+            or_ = outline_surf.get_rect(centerx=cx + ox, centery=ty + oy)
+            screen.blit(outline_surf, or_)
+
+    # Step 3: neon magenta fill on top — use GothicByte for eerie horror look
+    screen.blit(title_surf, title_rect)
+
+    # ── Separator lines ────────────────────────────────────────────────────
+    sep_y = title_rect.bottom + 20
+    pygame.draw.line(screen, C_ACCENT, (cx - 280, sep_y), (cx - 50, sep_y), 2)
+    pygame.draw.line(screen, C_ACCENT, (cx + 50,  sep_y), (cx + 280, sep_y), 2)
 
     # ── Menu items ─────────────────────────────────────────────────────────
-    item_y0      = PIXEL_H // 2 + 16
-    item_spacing = 22
+    item_y0      = sep_y + 60
+    item_spacing = 80
     for i, label in enumerate(MENU_ITEMS):
         is_sel = (i == selected)
         color  = C_WHITE if is_sel else C_DIM
         iy     = item_y0 + i * item_spacing
 
-        if is_sel:
-            # Accent highlight box — #F30261 border, very dark fill
-            item_w = _font_lg.size(label)[0]
-            box    = pygame.Rect(cx - item_w // 2 - 14, iy - 6, item_w + 28, 14)
-            pygame.draw.rect(c, (25, 2, 14), box)           # near-black fill
-            pygame.draw.rect(c, C_ACCENT, box, 1)           # #F30261 border
-
         item_s = _font_lg.render(label, False, color)
-        c.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
+        item_w = item_s.get_width()
+        item_h = item_s.get_height()
 
         if is_sel:
-            arr = _font_lg.render(">", False, C_ACCENT)     # #F30261 cursor
-            c.blit(arr, (cx - _font_lg.size(label)[0] // 2 - 13, iy - 5))
+            box = pygame.Rect(cx - item_w // 2 - 32, iy - item_h // 2 - 8,
+                              item_w + 64, item_h + 16)
+            pygame.draw.rect(screen, (25, 2, 14), box)
+            pygame.draw.rect(screen, C_ACCENT, box, 2)
+
+        screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
+
+        if is_sel:
+            arr = _font_lg.render(">", False, C_ACCENT)
+            screen.blit(arr, (cx - item_w // 2 - 44, iy - arr.get_height() // 2))
 
     # ── Controls hint ──────────────────────────────────────────────────────
-    hint = _font_sm.render("W/S  ENTER to select", False, C_DIM)
-    c.blit(hint, hint.get_rect(centerx=cx, centery=PIXEL_H - 7))
-
-    blit_canvas_to_screen(screen)
+    hint = _font_sm.render("W/S   ENTER to select", False, C_DIM)
+    screen.blit(hint, hint.get_rect(centerx=cx, centery=h - 32))
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +482,18 @@ def draw_game_bg(screen: pygame.Surface, frame: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Hover tracking
+# ---------------------------------------------------------------------------
+_hovered_card_id: int = -1
+
+
+def set_hovered(card) -> None:
+    """Call each frame from main.py with the card under the mouse (or None)."""
+    global _hovered_card_id
+    _hovered_card_id = id(card) if card is not None else -1
+
+
+# ---------------------------------------------------------------------------
 # Card rendering  (full-res — sprites are already pixel art)
 # ---------------------------------------------------------------------------
 
@@ -401,6 +506,7 @@ def draw_card(
     from card import CardState
 
     rect: pygame.Rect = card.rect
+    cid = id(card)
 
     if card.state == CardState.FACE_DOWN:
         src = get_back_surf()
@@ -419,16 +525,35 @@ def draw_card(
     bx     = rect.x + (card_w - dw) // 2
     screen.blit(scaled, (bx, rect.y))
 
-    cid = id(card)
+    # Match pulse border
     if cid in _pulse and int(_pulse[cid]) % 12 < 6:
-        gr = rect.inflate(4, 4)
+        gr = pygame.Rect(bx, rect.y, dw, card_h).inflate(4, 4)
         pygame.draw.rect(screen, C_MATCH, gr, width=2, border_radius=3)
 
+    # Mismatch red overlay (stays with the shake)
     if cid in _flash:
         alpha = int(_flash[cid])
         fsurf = pygame.Surface((dw, card_h), pygame.SRCALPHA)
         fsurf.fill((*C_MISMATCH, alpha))
         screen.blit(fsurf, (bx, rect.y))
+
+    # Hover highlight — dynamic pulsing magenta glow on face-down hoverable cards
+    if cid == _hovered_card_id and card.state == CardState.FACE_DOWN:
+        hr = pygame.Rect(bx, rect.y, dw, card_h)
+        # Sine-wave pulse: completes a cycle every ~800ms
+        t_pulse = (pygame.time.get_ticks() % 800) / 800.0
+        pulse   = (math.sin(t_pulse * 2 * math.pi) + 1) / 2   # 0.0 -> 1.0
+        # Glow alpha breathes between 30 and 100
+        glow_alpha = int(30 + pulse * 70)
+        # Border width alternates between 1 and 3
+        border_w = 1 + int(pulse * 2)
+        # Outer glow (inflated rectangle, semi-transparent fill)
+        glow_pad  = 6 + int(pulse * 4)
+        glow_surf = pygame.Surface((dw + glow_pad * 2, card_h + glow_pad * 2), pygame.SRCALPHA)
+        pygame.draw.rect(glow_surf, (*C_ACCENT, glow_alpha), glow_surf.get_rect(), border_radius=6)
+        screen.blit(glow_surf, (bx - glow_pad, rect.y - glow_pad))
+        # Sharp inner border
+        pygame.draw.rect(screen, C_ACCENT, hr, width=border_w, border_radius=3)
 
 
 def draw_card_grid(
@@ -442,6 +567,44 @@ def draw_card_grid(
 
 
 # ---------------------------------------------------------------------------
+# Floating Text & Score Juice
+# ---------------------------------------------------------------------------
+_prev_score:  int = 0
+_score_juice: float = 0.0
+_floating_texts: list[dict] = []
+
+def _spawn_floating_score(x: int, y: int, points: int) -> None:
+    _floating_texts.append({
+        "x": float(x),
+        "y": float(y),
+        "text": f"+{points}",
+        "life": 1.0,
+    })
+
+def _draw_floating_texts(screen: pygame.Surface) -> None:
+    font = get_gothic_font(36)
+    for ft in _floating_texts:
+        ft["y"] -= 0.8  # drift up
+        ft["life"] -= 0.015
+        if ft["life"] <= 0:
+            continue
+            
+        alpha = int(255 * min(1.0, ft["life"] * 3.0))
+        
+        # Shadow
+        sh = font.render(ft["text"], False, C_ACCENT_DK)
+        sh.set_alpha(alpha)
+        screen.blit(sh, (int(ft["x"]) + 2, int(ft["y"]) + 2))
+        
+        # Text
+        ts = font.render(ft["text"], False, C_ACCENT)
+        ts.set_alpha(alpha)
+        screen.blit(ts, (int(ft["x"]), int(ft["y"])))
+        
+    _floating_texts[:] = [ft for ft in _floating_texts if ft["life"] > 0]
+
+
+# ---------------------------------------------------------------------------
 # HUD strip  —  pixelated slanted health bar + score
 # ---------------------------------------------------------------------------
 
@@ -452,14 +615,8 @@ def draw_hud(
     hud_h:  int,
     frame:  int,
 ) -> None:
-    """
-    HUD layout (left → right):
-        [pixelated slanted bar × 2 stacked]  <gap>  SCORE 000000  (right)
+    global _prev_score, _score_juice
 
-    The slanted bar is scaled up 3× from its native 42×7px to be clearly
-    visible at full resolution.  Two bars are stacked vertically (they
-    represent one HP value together — same frame, decorative double-bar look).
-    """
     w = screen.get_width()
 
     pygame.draw.rect(screen, C_HUD_BG, (0, 0, w, hud_h))
@@ -494,11 +651,55 @@ def draw_hud(
             pygame.draw.rect(screen, C_ACCENT, (bar_x, bar_top_y, fill_w, bar_display_h))
         pygame.draw.rect(screen, C_ACCENT_DK, (bar_x, bar_top_y, bar_display_w, bar_display_h), 1)
 
-    # ── Score (right-aligned) ───────────────────────────────────────────────
-    hud_font = pygame.font.SysFont("couriernew", 14, bold=True)
-    sc_surf  = hud_font.render(f"SCORE  {score:06d}", False, C_WHITE)
-    screen.blit(sc_surf, (w - sc_surf.get_width() - 20,
-                           hud_h // 2 - sc_surf.get_height() // 2))
+    # ── Scoreboard (Gothic Housing + Juice) ─────────────────────────────────
+    box_w = 240
+    box_h = 36
+    box_x = w - box_w - 20
+    box_y = hud_h // 2 - box_h // 2
+
+    # Check for score increase
+    if score > _prev_score:
+        _score_juice = 1.0  # Max juice
+        diff = score - _prev_score
+        # Spawn floating text right beneath the box
+        _spawn_floating_score(box_x + box_w // 2 - 20, box_y + box_h + 10, diff)
+    
+    _prev_score = score
+
+    if _score_juice > 0:
+        _score_juice = max(0.0, _score_juice - 0.05)
+
+    # Draw Gothic Box
+    box_bg = (15 + int(40 * _score_juice), 5, 25)  # Brightens when juiced
+    pygame.draw.rect(screen, box_bg, (box_x, box_y, box_w, box_h), border_radius=4)
+    pygame.draw.rect(screen, C_ACCENT_DK, (box_x, box_y, box_w, box_h), 2, border_radius=4)
+
+    # Juicy Font Scale — base 18px, grows to 26px when juiced
+    base_size = 18
+    font_size = base_size + int(_score_juice * 8)
+    hud_font = get_gothic_font(font_size)
+
+    # Color interpolates from White to Neon Magenta when juiced
+    t_c = (
+        int(C_WHITE[0] + (C_ACCENT[0] - C_WHITE[0]) * _score_juice),
+        int(C_WHITE[1] + (C_ACCENT[1] - C_WHITE[1]) * _score_juice),
+        int(C_WHITE[2] + (C_ACCENT[2] - C_WHITE[2]) * _score_juice)
+    )
+
+    score_str = f"SCORE {score:06d}"
+    
+    # Shadow
+    sh_surf = hud_font.render(score_str, False, C_ACCENT_DK)
+    tx = box_x + box_w // 2 - sh_surf.get_width() // 2
+    ty = box_y + box_h // 2 - sh_surf.get_height() // 2
+    screen.blit(sh_surf, (tx + 2, ty + 2))
+    
+    # Foreground Text
+    sc_surf = hud_font.render(score_str, False, t_c)
+    screen.blit(sc_surf, (tx, ty))
+
+    # Draw Floating Texts over everything
+    _draw_floating_texts(screen)
 
 
 # ---------------------------------------------------------------------------
@@ -506,6 +707,6 @@ def draw_hud(
 # ---------------------------------------------------------------------------
 
 def draw_esc_hint(screen: pygame.Surface) -> None:
-    hint_font = pygame.font.SysFont("couriernew", 12, bold=False)
+    hint_font = get_gothic_font(22)
     hint      = hint_font.render("ESC - MENU", False, C_DIM)
     screen.blit(hint, (10, screen.get_height() - hint.get_height() - 8))
