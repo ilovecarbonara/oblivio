@@ -72,6 +72,7 @@
 - [ ] Source a new, dynamic health bar asset
 - [ ] Redesign and fancy-up the live scoreboard UI
 - [ ] **[Moved from Jay's W4]** Source audio assets: BGM (Menu & In-game) and SFX (flip, match, mismatch)
+- [ ] Source an updated, more legible pixel art card sprite sheet (current numbers are hard to read)
 
 **Branch:** `week-2/Jim/card-visuals-and-states`
 

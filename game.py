@@ -271,7 +271,7 @@ class Game:
         self.hp.deduct(self.difficulty.hp_penalty)
         print(
             f"[MISMATCH] {a.rank} of {a.suit} vs {b.rank} of {b.suit}  "
-            f"HP: {self.hp.current_hp}/{HPBar.MAX_HP} (\u2212{self.difficulty.hp_penalty})"
+            f"HP: {self.hp.current_hp}/{HPBar.MAX_HP} (-{self.difficulty.hp_penalty})"
         )
         self.lock_input     = True
         self.mismatch_timer = MISMATCH_DELAY_MS

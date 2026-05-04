@@ -29,7 +29,8 @@ SCALE   = 4     # upscale factor  →  1024 × 768 output
 # ---------------------------------------------------------------------------
 _HERE      = os.path.dirname(__file__)
 _BASE      = os.path.join(_HERE, "game-assets", "sprites")
-_CARDS     = os.path.join(_BASE, "CARDS", "Cards", "Dark", "Separated-Cards PNG")
+_CARDS_PNG = os.path.join(_BASE, "CARDS", "FantasyCards", "FantasyCards.png")
+_CARD_BACK = os.path.join(_BASE, "CARDS", "FantasyCards", "Backsides", "Eye.png")
 _HEALTH_PX = os.path.join(_BASE, "HEALTH", "Pixelated")   # new pixelated bar
 
 # ---------------------------------------------------------------------------
@@ -197,33 +198,49 @@ def _tick_hp() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Card sprite mapping
+# Card sprite mapping (FantasyCards.png)
+# 
+# Sheet layout: 13 columns (A, 2-10, J, Q, K), 4 rows.
+# Card size: 23x35 px, with 1px transparent gap (stride is 24x36).
+# 
+# Rows (based on visual icons):
+# 0: Spades (Red Sword)
+# 1: Clubs (White Skull)
+# 2: Diamonds (White Spark)
+# 3: Hearts (Red Shield)
 # ---------------------------------------------------------------------------
 _RANKS      = ("A","2","3","4","5","6","7","8","9","10","J","Q","K")
-_SUIT_START = {"Hearts": 9, "Diamonds": 22, "Clubs": 35, "Spades": 48}
-CARD_BACK_IDX = 1
+_SUIT_ROW   = {"Spades": 0, "Clubs": 1, "Diamonds": 2, "Hearts": 3}
 
-_card_sprites: dict[int, pygame.Surface] = {}
+_card_sprites: dict[str, pygame.Surface] = {}
+_card_back: pygame.Surface | None = None
 
 
 def load_card_sprites() -> None:
+    global _card_back
     _card_sprites.clear()
-    for i in range(1, 65):
-        path = os.path.join(_CARDS, f"cardsDark{i}.png")
-        if os.path.exists(path):
-            _card_sprites[i] = pygame.image.load(path).convert_alpha()
-
-
-def _card_idx(suit: str, rank: str) -> int:
-    return _SUIT_START[suit] + _RANKS.index(rank)
+    
+    if os.path.exists(_CARDS_PNG):
+        sheet = pygame.image.load(_CARDS_PNG).convert_alpha()
+        for suit, row_idx in _SUIT_ROW.items():
+            for rank_idx, rank in enumerate(_RANKS):
+                x = rank_idx * 24
+                y = row_idx * 36
+                surf = sheet.subsurface(pygame.Rect(x, y, 23, 35))
+                _card_sprites[f"{suit}_{rank}"] = surf.copy()
+    else:
+        print(f"[WARN] Card sheet not found: {_CARDS_PNG}")
+        
+    if os.path.exists(_CARD_BACK):
+        _card_back = pygame.image.load(_CARD_BACK).convert_alpha()
 
 
 def get_card_surf(suit: str, rank: str) -> pygame.Surface | None:
-    return _card_sprites.get(_card_idx(suit, rank))
+    return _card_sprites.get(f"{suit}_{rank}")
 
 
 def get_back_surf() -> pygame.Surface | None:
-    return _card_sprites.get(CARD_BACK_IDX)
+    return _card_back
 
 
 # ---------------------------------------------------------------------------
