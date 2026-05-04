@@ -30,7 +30,7 @@ SCALE   = 4     # upscale factor  →  1024 × 768 output
 _HERE      = os.path.dirname(__file__)
 _BASE      = os.path.join(_HERE, "game-assets", "sprites")
 _CARDS_PNG = os.path.join(_BASE, "CARDS", "FantasyCards", "FantasyCards.png")
-_CARD_BACK = os.path.join(_BASE, "CARDS", "FantasyCards", "Backsides", "Eye.png")
+_CARD_BACK = os.path.join(_BASE, "CARDS", "FantasyCards", "Backsides", "DefaultFantasy.png")
 _HEALTH_PX = os.path.join(_BASE, "HEALTH", "Pixelated")   # new pixelated bar
 
 # ---------------------------------------------------------------------------
@@ -310,7 +310,7 @@ def _flip_scale(card) -> float:
 # ---------------------------------------------------------------------------
 # Mismatch flash
 # ---------------------------------------------------------------------------
-_flash: dict[int, float] = {}
+_flash:  dict[int, float] = {}
 FLASH_FRAMES = 24
 
 
@@ -327,6 +327,36 @@ def update_mismatch_flash(dt: float = 1.0) -> None:
             done.append(cid)
     for cid in done:
         del _flash[cid]
+
+
+# ---------------------------------------------------------------------------
+# Screen shake  —  triggered on mismatch, replaces per-card shake
+# ---------------------------------------------------------------------------
+_shake_frames: int = 0
+_SHAKE_MAX:    int = 18     # frames of shake duration
+_SHAKE_AMP:    int = 14     # max pixel displacement
+
+
+def trigger_screen_shake() -> None:
+    """Call on mismatch to start a screen shake hit."""
+    global _shake_frames
+    _shake_frames = _SHAKE_MAX
+
+
+def update_screen_shake() -> None:
+    global _shake_frames
+    if _shake_frames > 0:
+        _shake_frames -= 1
+
+
+def get_screen_shake_offset() -> tuple[int, int]:
+    """Returns (ox, oy) pixel offset to apply to the whole screen this frame."""
+    if _shake_frames <= 0:
+        return (0, 0)
+    t  = _shake_frames / _SHAKE_MAX   # 1.0 → 0.0  (trauma envelope)
+    ox = int(_SHAKE_AMP * t * math.sin(_shake_frames * 2.5))
+    oy = int(_SHAKE_AMP * 0.5 * t * math.sin(_shake_frames * 1.8 + 0.8))
+    return (ox, oy)
 
 
 # ---------------------------------------------------------------------------
@@ -452,6 +482,18 @@ def draw_game_bg(screen: pygame.Surface, frame: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Hover tracking
+# ---------------------------------------------------------------------------
+_hovered_card_id: int = -1
+
+
+def set_hovered(card) -> None:
+    """Call each frame from main.py with the card under the mouse (or None)."""
+    global _hovered_card_id
+    _hovered_card_id = id(card) if card is not None else -1
+
+
+# ---------------------------------------------------------------------------
 # Card rendering  (full-res — sprites are already pixel art)
 # ---------------------------------------------------------------------------
 
@@ -464,6 +506,7 @@ def draw_card(
     from card import CardState
 
     rect: pygame.Rect = card.rect
+    cid = id(card)
 
     if card.state == CardState.FACE_DOWN:
         src = get_back_surf()
@@ -482,16 +525,35 @@ def draw_card(
     bx     = rect.x + (card_w - dw) // 2
     screen.blit(scaled, (bx, rect.y))
 
-    cid = id(card)
+    # Match pulse border
     if cid in _pulse and int(_pulse[cid]) % 12 < 6:
-        gr = rect.inflate(4, 4)
+        gr = pygame.Rect(bx, rect.y, dw, card_h).inflate(4, 4)
         pygame.draw.rect(screen, C_MATCH, gr, width=2, border_radius=3)
 
+    # Mismatch red overlay (stays with the shake)
     if cid in _flash:
         alpha = int(_flash[cid])
         fsurf = pygame.Surface((dw, card_h), pygame.SRCALPHA)
         fsurf.fill((*C_MISMATCH, alpha))
         screen.blit(fsurf, (bx, rect.y))
+
+    # Hover highlight — dynamic pulsing magenta glow on face-down hoverable cards
+    if cid == _hovered_card_id and card.state == CardState.FACE_DOWN:
+        hr = pygame.Rect(bx, rect.y, dw, card_h)
+        # Sine-wave pulse: completes a cycle every ~800ms
+        t_pulse = (pygame.time.get_ticks() % 800) / 800.0
+        pulse   = (math.sin(t_pulse * 2 * math.pi) + 1) / 2   # 0.0 -> 1.0
+        # Glow alpha breathes between 30 and 100
+        glow_alpha = int(30 + pulse * 70)
+        # Border width alternates between 1 and 3
+        border_w = 1 + int(pulse * 2)
+        # Outer glow (inflated rectangle, semi-transparent fill)
+        glow_pad  = 6 + int(pulse * 4)
+        glow_surf = pygame.Surface((dw + glow_pad * 2, card_h + glow_pad * 2), pygame.SRCALPHA)
+        pygame.draw.rect(glow_surf, (*C_ACCENT, glow_alpha), glow_surf.get_rect(), border_radius=6)
+        screen.blit(glow_surf, (bx - glow_pad, rect.y - glow_pad))
+        # Sharp inner border
+        pygame.draw.rect(screen, C_ACCENT, hr, width=border_w, border_radius=3)
 
 
 def draw_card_grid(

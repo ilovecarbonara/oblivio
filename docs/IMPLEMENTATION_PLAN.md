@@ -71,7 +71,7 @@
 - [ ] Source and implement a new pixelate visual effect for matched cards (replacing the magenta pulse)
 - [ ] Source a new, dynamic health bar asset
 - [ ] Redesign and fancy-up the live scoreboard UI
-- [ ] **[Moved from Jay's W4]** Source audio assets: BGM (Menu & In-game) and SFX (flip, match, mismatch)
+- [ ] **[Moved from Jay's W4]** Source audio assets: BGM (Menu & In-game)
 - [ ] Source an updated, more legible pixel art card sprite sheet (current numbers are hard to read)
 
 **Branch:** `week-2/Jim/card-visuals-and-states`
@@ -142,6 +142,7 @@
 - [ ] Implement **screen transition** (fade-to-black) — draw a black overlay with increasing alpha (0 → 255) over ~0.5 seconds before switching to Game Over / Win screen
 - [ ] Final visual polish — make sure all sprites align, fonts are consistent, colors match the style guide
 - [ ] Confirm fixed window size (no resizing allowed)
+- [ ] Source and implement SFX audio assets (flip, match, mismatch)
 
 **Branch:** `week-4/Jim/animations-and-polish`
 
