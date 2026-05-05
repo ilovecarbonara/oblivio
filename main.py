@@ -191,7 +191,7 @@ def main() -> None:
 
         elif game.state == GameState.PLAYING:
             ui.draw_game_bg(screen, frame // 4)   # slow spin behind cards
-            ui.draw_hud(screen, game.hp.current_hp, game.score.total, HUD_H, frame)
+            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
 
             # Hover detection — find which face-down card the mouse is over
             mx, my = pygame.mouse.get_pos()
@@ -205,7 +205,7 @@ def main() -> None:
                         break
             ui.set_hovered(hovered)
 
-            ui.draw_card_grid(screen, game.cards, current_cw, current_ch)
+            ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier)
             ui.draw_esc_hint(screen)
 
         elif game.state == GameState.GRID_SELECT:

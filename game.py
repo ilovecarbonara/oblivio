@@ -247,15 +247,17 @@ class Game:
             b.mark_matched()
             self.matched_pairs += 1
 
-            # --- Score calculation (Week 3) ---
+            # --- Score calculation (Week 3 + streak multiplier) ---
             elapsed_ms = pygame.time.get_ticks() - self._turn_start_ticks
             elapsed_s  = elapsed_ms / 1000.0
+            mult       = self.score.multiplier   # capture BEFORE add_match increments streak
             earned     = self.score.add_match(elapsed_s)
 
             print(
                 f"[MATCH] {a.rank} of {a.suit}  "
                 f"({self.matched_pairs}/{self.difficulty.pairs})  "
-                f"+{earned} pts ({elapsed_s:.2f}s)"
+                f"+{earned} pts ({elapsed_s:.2f}s)  "
+                f"{mult:.1f}x streak"
             )
             self.flipped_cards.clear()
 
@@ -267,11 +269,13 @@ class Game:
 
             return "match"
 
-        # Mismatch — lock input, deduct HP, start countdown
+        # Mismatch — lock input, deduct HP, reset streak, start countdown
         self.hp.deduct(self.difficulty.hp_penalty)
+        self.score.reset_streak()
         print(
             f"[MISMATCH] {a.rank} of {a.suit} vs {b.rank} of {b.suit}  "
-            f"HP: {self.hp.current_hp}/{HPBar.MAX_HP} (-{self.difficulty.hp_penalty})"
+            f"HP: {self.hp.current_hp}/{HPBar.MAX_HP} (-{self.difficulty.hp_penalty})  "
+            f"streak reset"
         )
         self.lock_input     = True
         self.mismatch_timer = MISMATCH_DELAY_MS

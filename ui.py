@@ -561,10 +561,34 @@ def draw_card_grid(
     cards:  list,
     card_w: int,
     card_h: int,
+    multiplier: float = 1.0,
 ) -> None:
     for card in cards:
         draw_card(screen, card, card_w, card_h)
 
+    # Draw persistent multiplier badge on the top right corner of the grid
+    if multiplier > 1.0 and cards:
+        max_x = max(c.rect.right for c in cards)
+        min_y = min(c.rect.top for c in cards)
+        
+        font = get_gothic_font(42)  # slightly larger and juicy
+        
+        # Text and shadow
+        text_surf = font.render(f"{multiplier:.1f}x", False, C_ACCENT)
+        shadow_surf = font.render(f"{multiplier:.1f}x", False, C_ACCENT_DK)
+        
+        # Tilt to the right
+        text_surf = pygame.transform.rotate(text_surf, -15)
+        shadow_surf = pygame.transform.rotate(shadow_surf, -15)
+        
+        # Position offset: place the bottom-left of the text near the top-right of the grid
+        tw = text_surf.get_width()
+        th = text_surf.get_height()
+        tx = max_x - tw // 2 + 10
+        ty = min_y - th // 2 - 10
+        
+        screen.blit(shadow_surf, (tx + 4, ty + 4))
+        screen.blit(text_surf, (tx, ty))
 
 # ---------------------------------------------------------------------------
 # Floating Text & Score Juice
@@ -573,11 +597,11 @@ _prev_score:  int = 0
 _score_juice: float = 0.0
 _floating_texts: list[dict] = []
 
-def _spawn_floating_score(x: int, y: int, points: int) -> None:
+def _spawn_floating_score(x: int, y: int, text: str) -> None:
     _floating_texts.append({
         "x": float(x),
         "y": float(y),
-        "text": f"+{points}",
+        "text": text,
         "life": 1.0,
     })
 
@@ -612,6 +636,7 @@ def draw_hud(
     screen: pygame.Surface,
     hp:     float,
     score:  int,
+    multiplier: float,
     hud_h:  int,
     frame:  int,
 ) -> None:
@@ -661,8 +686,9 @@ def draw_hud(
     if score > _prev_score:
         _score_juice = 1.0  # Max juice
         diff = score - _prev_score
+        
         # Spawn floating text right beneath the box
-        _spawn_floating_score(box_x + box_w // 2 - 20, box_y + box_h + 10, diff)
+        _spawn_floating_score(box_x + box_w // 2 - 20, box_y + box_h + 10, f"+{diff}")
     
     _prev_score = score
 
