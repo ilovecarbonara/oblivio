@@ -384,7 +384,7 @@ def update_match_pulse(dt: float = 1.0) -> None:
 # ---------------------------------------------------------------------------
 # Main Menu
 # ---------------------------------------------------------------------------
-MENU_ITEMS = ["PLAY", "QUIT"]
+MENU_ITEMS = ["PLAY", "OPTIONS", "QUIT"]
 
 
 def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
@@ -779,7 +779,7 @@ def draw_hud(
 def draw_esc_hint(screen: pygame.Surface) -> None:
     hint_font = get_gothic_font(18)
     lines = [
-        "ESC - MENU",
+        "ESC - PAUSE",
         "WASD / Arrow Keys - move   SPACE - flip card",
     ]
     y = screen.get_height() - hint_font.get_height() * len(lines) - 10
@@ -787,3 +787,221 @@ def draw_esc_hint(screen: pygame.Surface) -> None:
         surf = hint_font.render(line, False, C_DIM)
         screen.blit(surf, (10, y))
         y += hint_font.get_height() + 2
+
+
+# ---------------------------------------------------------------------------
+# Pause overlay  —  drawn ON TOP of the frozen game frame
+# ---------------------------------------------------------------------------
+PAUSE_ITEMS = ["RESUME", "RESTART", "OPTIONS"]
+
+
+def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> None:
+    """
+    Semi-transparent dark veil over the frozen game, with a centered
+    pause menu in the same gothic style as the main menu.
+    """
+    w = screen.get_width()
+    h = screen.get_height()
+    cx = w // 2
+
+    # Dark overlay
+    veil = pygame.Surface((w, h), pygame.SRCALPHA)
+    veil.fill((0, 0, 0, 180))
+    screen.blit(veil, (0, 0))
+
+    if _font_lg is None or _font_sm is None:
+        return
+
+    # Title
+    title_font = get_gothic_font(48)
+    title_surf = title_font.render("PAUSED", False, C_WHITE)
+    shadow_surf = title_font.render("PAUSED", False, C_ACCENT_DK)
+    title_rect = title_surf.get_rect(centerx=cx, centery=h // 2 - 120)
+    screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
+    screen.blit(title_surf, title_rect)
+
+    # Separator
+    sep_y = title_rect.bottom + 12
+    pygame.draw.line(screen, C_ACCENT, (cx - 160, sep_y), (cx + 160, sep_y), 2)
+
+    # Menu items
+    item_y0 = sep_y + 40
+    item_spacing = 60
+    for i, label in enumerate(PAUSE_ITEMS):
+        is_sel = (i == selected)
+        color = C_WHITE if is_sel else C_DIM
+        iy = item_y0 + i * item_spacing
+
+        item_s = _font_lg.render(label, False, color)
+        item_w = item_s.get_width()
+        item_h = item_s.get_height()
+
+        if is_sel:
+            box = pygame.Rect(cx - item_w // 2 - 32, iy - item_h // 2 - 8,
+                              item_w + 64, item_h + 16)
+            pygame.draw.rect(screen, (25, 2, 14), box)
+            pygame.draw.rect(screen, C_ACCENT, box, 2)
+
+        screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
+
+        if is_sel:
+            arr = _font_lg.render(">", False, C_ACCENT)
+            screen.blit(arr, (cx - item_w // 2 - 44, iy - arr.get_height() // 2))
+
+    # Controls hint
+    hint = _font_sm.render("WASD / Arrows  |  ENTER to select", False, C_DIM)
+    screen.blit(hint, hint.get_rect(centerx=cx, centery=h - 32))
+
+
+# ---------------------------------------------------------------------------
+# Options menu  —  full-screen settings panel
+# ---------------------------------------------------------------------------
+
+# Row labels for the options menu
+_OPT_LABELS = [
+    "DISPLAY MODE",
+    "RESOLUTION",
+    "MASTER VOLUME",
+    "MUSIC VOLUME",
+    "SFX VOLUME",
+    "",              # APPLY & BACK button row
+]
+
+
+def _draw_volume_bar(
+    screen: pygame.Surface,
+    x: int, y: int,
+    width: int, height: int,
+    value: float,
+    is_selected: bool,
+) -> None:
+    """Draw a pixel-art volume bar: filled portion in accent, empty in dark."""
+    # Background
+    bg_color = (25, 10, 35)
+    pygame.draw.rect(screen, bg_color, (x, y, width, height))
+
+    # Filled portion
+    fill_w = int(width * value)
+    if fill_w > 0:
+        fill_color = C_ACCENT if is_selected else (160, 2, 70)
+        pygame.draw.rect(screen, fill_color, (x, y, fill_w, height))
+
+    # Border
+    border_color = C_ACCENT if is_selected else C_ACCENT_DK
+    pygame.draw.rect(screen, border_color, (x, y, width, height), 2)
+
+    # Percentage text
+    pct_font = get_gothic_font(18)
+    pct_text = f"{int(value * 100)}%"
+    pct_surf = pct_font.render(pct_text, False, C_WHITE if is_selected else C_DIM)
+    screen.blit(pct_surf, (x + width + 14, y + height // 2 - pct_surf.get_height() // 2))
+
+
+def draw_options_menu(
+    screen: pygame.Surface,
+    settings,
+    selected_row: int,
+    frame: int,
+    origin: str,
+) -> None:
+    """
+    Full-screen options menu.  ``settings`` is the settings module.
+    ``origin`` is 'menu' or 'pause' — changes the back-button label.
+    """
+    c = get_canvas()
+    draw_creepy_void(c, frame)
+    blit_canvas_to_screen(screen)
+
+    w = screen.get_width()
+    h = screen.get_height()
+    cx = w // 2
+
+    if _font_lg is None or _font_sm is None:
+        return
+
+    # ── Title ───────────────────────────────────────────────────────────
+    title_font = get_gothic_font(48)
+    title_surf = title_font.render("OPTIONS", False, C_WHITE)
+    shadow_surf = title_font.render("OPTIONS", False, C_ACCENT_DK)
+    title_rect = title_surf.get_rect(centerx=cx, centery=80)
+    screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
+    screen.blit(title_surf, title_rect)
+
+    # Separator
+    sep_y = title_rect.bottom + 12
+    pygame.draw.line(screen, C_ACCENT, (cx - 240, sep_y), (cx + 240, sep_y), 2)
+
+    # ── Settings rows ──────────────────────────────────────────────────
+    row_y0 = sep_y + 40
+    row_spacing = 60
+    label_font = get_gothic_font(22)
+    value_font = get_gothic_font(22)
+
+    label_x = cx - 280   # left-aligned labels
+    value_x = cx + 40    # right-aligned values area
+
+    for row in range(6):
+        is_sel = (row == selected_row)
+        ry = row_y0 + row * row_spacing
+        color = C_WHITE if is_sel else C_DIM
+
+        # Row 5 is the APPLY & BACK button
+        if row == 5:
+            btn_label = "APPLY & BACK"
+            btn_surf = _font_lg.render(btn_label, False, color)
+            btn_w = btn_surf.get_width()
+            btn_h = btn_surf.get_height()
+            btn_y = ry
+
+            if is_sel:
+                box = pygame.Rect(cx - btn_w // 2 - 32, btn_y - btn_h // 2 - 8,
+                                  btn_w + 64, btn_h + 16)
+                pygame.draw.rect(screen, (25, 2, 14), box)
+                pygame.draw.rect(screen, C_ACCENT, box, 2)
+                arr = _font_lg.render(">", False, C_ACCENT)
+                screen.blit(arr, (cx - btn_w // 2 - 44, btn_y - arr.get_height() // 2))
+
+            screen.blit(btn_surf, btn_surf.get_rect(centerx=cx, centery=btn_y))
+            continue
+
+        # Label
+        lbl_surf = label_font.render(_OPT_LABELS[row], False, color)
+        screen.blit(lbl_surf, (label_x, ry - lbl_surf.get_height() // 2))
+
+        # Row highlight line
+        if is_sel:
+            hl_y = ry + lbl_surf.get_height() // 2 + 4
+            pygame.draw.line(screen, C_ACCENT,
+                             (label_x, hl_y),
+                             (label_x + lbl_surf.get_width(), hl_y), 1)
+
+        # Value display
+        if row == 0:  # Display Mode
+            mode_label = settings.current_display_mode_label()
+            val_str = f"< {mode_label} >"
+            val_surf = value_font.render(val_str, False, color)
+            screen.blit(val_surf, (value_x, ry - val_surf.get_height() // 2))
+
+        elif row == 1:  # Resolution
+            res_w, res_h = settings.current_resolution()
+            val_str = f"< {res_w} x {res_h} >"
+            val_surf = value_font.render(val_str, False, color)
+            screen.blit(val_surf, (value_x, ry - val_surf.get_height() // 2))
+
+        elif row == 2:  # Master Volume
+            _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
+                             settings.master_volume, is_sel)
+
+        elif row == 3:  # Music Volume
+            _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
+                             settings.music_volume, is_sel)
+
+        elif row == 4:  # SFX Volume
+            _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
+                             settings.sfx_volume, is_sel)
+
+    # ── Controls hint ──────────────────────────────────────────────────
+    hint1 = _font_sm.render("UP/DOWN - navigate  |  LEFT/RIGHT - adjust", False, C_DIM)
+    hint2 = _font_sm.render("ENTER - apply & back  |  ESC - back", False, C_DIM)
+    screen.blit(hint1, hint1.get_rect(centerx=cx, centery=h - 56))
+    screen.blit(hint2, hint2.get_rect(centerx=cx, centery=h - 28))
