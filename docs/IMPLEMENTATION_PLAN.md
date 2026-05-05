@@ -142,7 +142,6 @@
 - [ ] Implement **screen transition** (fade-to-black) — draw a black overlay with increasing alpha (0 → 255) over ~0.5 seconds before switching to Game Over / Win screen
 - [ ] Final visual polish — make sure all sprites align, fonts are consistent, colors match the style guide
 - [ ] Confirm fixed window size (no resizing allowed)
-- [ ] Source and implement SFX audio assets (flip, match, mismatch)
 
 **Branch:** `week-4/Jim/animations-and-polish`
 
