@@ -15,6 +15,7 @@ from card import Card, CardState
 from game import Game, GameState, Difficulty
 import grid
 import ui
+import audio
 import settings as cfg
 
 
@@ -126,11 +127,13 @@ def main() -> None:
 
     clock = pygame.time.Clock()
 
-    # BGM path
-    _BGM_MENU = os.path.join(
-        os.path.dirname(__file__), "game-assets", "music", "Tetuano_menuBGM.mp3"
+    # Initialise audio (loads all SFX, applies volumes)
+    audio.init(
+        master_vol = cfg.master_volume,
+        music_vol  = cfg.music_volume,
+        sfx_vol    = cfg.sfx_volume,
     )
-    _music_state = None   # tracks what's currently playing: "menu" | "game" | None
+    audio.bgm_play_menu()   # start menu BGM immediately
 
     # Load all UI assets
     ui.load_fonts()
@@ -153,6 +156,15 @@ def main() -> None:
     # Tracks (col, row) within the active grid; None when not playing.
     cursor_pos: tuple[int, int] | None = None
 
+    # Previous game state — used to detect transitions (e.g. → GAME_OVER)
+    _prev_state: GameState = game.state
+
+    # Hover trackers — play sfx_hover() only on first frame a new item is highlighted
+    _prev_menu_sel:    int = menu_selected
+    _prev_grid_sel:    int = grid_selected
+    _prev_pause_sel:   int = pause_selected
+    _prev_options_sel: int = options_selected
+
     running = True
     dt_ms   = 0.0          # milliseconds since last frame
     while running:
@@ -170,12 +182,16 @@ def main() -> None:
                 # =====================================================
                 if event.key == pygame.K_ESCAPE:
                     if game.state == GameState.PLAYING:
+                        audio.bgm_pause()
+                        audio.sfx_popup()
                         game.to_pause()
                         pause_selected = 0
                     elif game.state == GameState.PAUSED:
+                        audio.bgm_resume()
+                        audio.sfx_cancel()
                         game.resume()
                     elif game.state == GameState.OPTIONS:
-                        # Apply display changes when leaving options
+                        audio.sfx_cancel()
                         screen = cfg.apply_display(screen)
                         win_w, win_h = screen.get_size()
                         if game.cards:
@@ -246,25 +262,36 @@ def main() -> None:
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
 
                     # --- Main Menu ---
-                    if game.state == GameState.MENU:
+                    if game.state == GameState.MENU and not ui.is_transition_active():
                         if menu_selected == 0:         # PLAY
+                            audio.sfx_select()
                             game.to_grid_select()
                             grid_selected = 0
                         elif menu_selected == 1:       # OPTIONS
+                            audio.sfx_select()
                             options_origin = "menu"
                             options_selected = 0
                             game.to_options(GameState.MENU)
                         elif menu_selected == 2:       # QUIT
+                            audio.sfx_select()
                             running = False
 
                     # --- Grid Select ---
-                    elif game.state == GameState.GRID_SELECT:
+                    elif game.state == GameState.GRID_SELECT and not ui.is_transition_active():
                         diff = list(Difficulty)[grid_selected]
-                        current_cw, current_ch, origin = get_grid_layout(diff, win_w, win_h)
-                        cards = grid.generate_grid(diff, current_cw, current_ch, PADDING, origin)
-                        game.start_game(diff, cards)
-                        cursor_pos = (0, 0)   # reset keyboard cursor to top-left
-                        print(f"[INFO] Game started — difficulty: {diff.label} ({diff.cols}×{diff.rows})")
+                        audio.sfx_select()
+                        # Capture locals for the closure
+                        _diff = diff
+                        def _start_game_cb():
+                            nonlocal current_cw, current_ch, cursor_pos
+                            _cw, _ch, _origin = get_grid_layout(_diff, win_w, win_h)
+                            current_cw, current_ch = _cw, _ch
+                            _cards = grid.generate_grid(_diff, _cw, _ch, PADDING, _origin)
+                            game.start_game(_diff, _cards)
+                            cursor_pos = (0, 0)
+                            audio.bgm_play_game(_diff.label)
+                            print(f"[INFO] Game started — difficulty: {_diff.label} ({_diff.cols}×{_diff.rows})")
+                        ui.start_transition(_start_game_cb)
 
                     # --- Playing (SPACE only — flip card) ---
                     elif game.state == GameState.PLAYING and event.key == pygame.K_SPACE:
@@ -281,18 +308,27 @@ def main() -> None:
                                         ui.start_flip(clicked)
 
                     # --- Paused ---
-                    elif game.state == GameState.PAUSED:
+                    elif game.state == GameState.PAUSED and not ui.is_transition_active():
                         if pause_selected == 0:        # RESUME
+                            audio.bgm_resume()
+                            audio.sfx_cancel()
                             game.resume()
                         elif pause_selected == 1:      # RESTART
-                            diff = game.difficulty
-                            current_cw, current_ch, origin = get_grid_layout(diff, win_w, win_h)
-                            cards = grid.generate_grid(diff, current_cw, current_ch, PADDING, origin)
-                            game.start_game(diff, cards)
-                            ui.reset_hp()
-                            cursor_pos = (0, 0)
-                            print(f"[INFO] Restarted — difficulty: {diff.label} ({diff.cols}×{diff.rows})")
+                            audio.sfx_select()
+                            _diff_r = game.difficulty
+                            def _restart_cb():
+                                nonlocal current_cw, current_ch, cursor_pos
+                                _cw, _ch, _origin = get_grid_layout(_diff_r, win_w, win_h)
+                                current_cw, current_ch = _cw, _ch
+                                _cards = grid.generate_grid(_diff_r, _cw, _ch, PADDING, _origin)
+                                game.start_game(_diff_r, _cards)
+                                ui.reset_hp()
+                                cursor_pos = (0, 0)
+                                audio.bgm_play_game(_diff_r.label)
+                                print(f"[INFO] Restarted — difficulty: {_diff_r.label} ({_diff_r.cols}×{_diff_r.rows})")
+                            ui.start_transition(_restart_cb)
                         elif pause_selected == 2:      # OPTIONS
+                            audio.sfx_select()
                             options_origin = "pause"
                             options_selected = 0
                             game.to_options(GameState.PAUSED)
@@ -300,6 +336,7 @@ def main() -> None:
                     # --- Options ---
                     elif game.state == GameState.OPTIONS:
                         if options_selected == 5:      # APPLY & BACK
+                            audio.sfx_select()
                             screen = cfg.apply_display(screen)
                             win_w, win_h = screen.get_size()
                             if game.cards:
@@ -307,17 +344,28 @@ def main() -> None:
                             game.from_options()
 
                     # --- Game Over / Win ---
-                    elif game.state in (GameState.GAME_OVER, GameState.WIN):
+                    elif game.state in (GameState.GAME_OVER, GameState.WIN) and not ui.is_transition_active():
                         if result_selected == 0:       # PLAY AGAIN
-                            diff = game.difficulty
-                            current_cw, current_ch, origin = get_grid_layout(diff, win_w, win_h)
-                            cards = grid.generate_grid(diff, current_cw, current_ch, PADDING, origin)
-                            game.start_game(diff, cards)
-                            cursor_pos = (0, 0)
-                            print(f"[INFO] Restarted — difficulty: {diff.label} ({diff.cols}×{diff.rows})")
+                            audio.sfx_select()
+                            _diff_ga = game.difficulty
+                            def _play_again_cb():
+                                nonlocal current_cw, current_ch, cursor_pos
+                                _cw, _ch, _origin = get_grid_layout(_diff_ga, win_w, win_h)
+                                current_cw, current_ch = _cw, _ch
+                                _cards = grid.generate_grid(_diff_ga, _cw, _ch, PADDING, _origin)
+                                game.start_game(_diff_ga, _cards)
+                                cursor_pos = (0, 0)
+                                audio.bgm_play_game(_diff_ga.label)
+                                print(f"[INFO] Restarted — difficulty: {_diff_ga.label} ({_diff_ga.cols}×{_diff_ga.rows})")
+                            ui.start_transition(_play_again_cb)
                         else:                          # MAIN MENU
-                            game.to_menu()
-                            cursor_pos = None
+                            audio.sfx_cancel()
+                            def _to_menu_cb():
+                                nonlocal cursor_pos
+                                game.to_menu()
+                                cursor_pos = None
+                                audio.bgm_play_menu()
+                            ui.start_transition(_to_menu_cb)
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if game.state == GameState.PLAYING:
@@ -330,34 +378,44 @@ def main() -> None:
         # -------------------------------------------------- game logic tick
         mismatched = game.update(dt_ms)
         if mismatched and len(mismatched) == 2:
+            audio.sfx_mismatch()
             ui.trigger_mismatch_flash(mismatched[0], mismatched[1])
-            ui.trigger_screen_shake()          # screen-shake hit effect
+            ui.trigger_screen_shake()
             for c in mismatched:
                 ui.start_flip(c)
+
+        # Detect transition to GAME_OVER or WIN — stop BGM
+        if game.state != _prev_state:
+            if game.state in (GameState.GAME_OVER, GameState.WIN):
+                audio.bgm_stop()
+            elif game.state == GameState.MENU and _prev_state not in (
+                    GameState.GRID_SELECT, GameState.OPTIONS):
+                audio.bgm_play_menu()
+            _prev_state = game.state
+
+        # Hover SFX — fire once per new keyboard selection
+        if game.state == GameState.MENU and menu_selected != _prev_menu_sel:
+            audio.sfx_hover()
+            _prev_menu_sel = menu_selected
+        elif game.state == GameState.GRID_SELECT and grid_selected != _prev_grid_sel:
+            audio.sfx_hover()
+            _prev_grid_sel = grid_selected
+        elif game.state == GameState.PAUSED and pause_selected != _prev_pause_sel:
+            audio.sfx_hover()
+            _prev_pause_sel = pause_selected
+        elif game.state == GameState.OPTIONS and options_selected != _prev_options_sel:
+            audio.sfx_hover()
+            _prev_options_sel = options_selected
 
         # -------------------------------------------------- animation ticks
         ui.update_flips()
         ui.update_mismatch_flash()
         ui.update_match_pulse()
         ui.update_screen_shake()
+        ui.update_transition()
         frame += 1
 
-        # -------------------------------------------------- BGM management
-        if game.state in (GameState.MENU, GameState.GRID_SELECT,
-                          GameState.OPTIONS) and options_origin == "menu":
-            if _music_state != "menu":
-                _music_state = "menu"
-                if os.path.exists(_BGM_MENU):
-                    pygame.mixer.music.load(_BGM_MENU)
-                    pygame.mixer.music.set_volume(cfg.effective_music_vol())
-                    pygame.mixer.music.play(-1)   # -1 = loop forever
-        elif game.state == GameState.OPTIONS and options_origin == "pause":
-            # Keep game music state unchanged while in pause-options
-            pass
-        else:
-            if _music_state == "menu":
-                _music_state = "game"
-                pygame.mixer.music.stop()
+        # (BGM managed explicitly at each state transition above)
 
         # -------------------------------------------------- render
         if game.state == GameState.MENU:
@@ -451,6 +509,9 @@ def main() -> None:
                 text = f"> {o} <" if i == result_selected else o
                 os_surf = sml.render(text, False, color)
                 screen.blit(os_surf, os_surf.get_rect(centerx=win_w // 2, centery=win_h // 2 + 60 + i * 30))
+
+        # Transition overlay (drawn last, on top of everything)
+        ui.draw_transition(screen)
 
         # Screen shake post-process — shift entire frame then black-fill edges
         ox, oy = ui.get_screen_shake_offset()
