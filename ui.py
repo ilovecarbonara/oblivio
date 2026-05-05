@@ -462,8 +462,8 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
             arr = _font_lg.render(">", False, C_ACCENT)
             screen.blit(arr, (cx - item_w // 2 - 44, iy - arr.get_height() // 2))
 
-    # ── Controls hint ──────────────────────────────────────────────────────
-    hint = _font_sm.render("W/S   ENTER to select", False, C_DIM)
+    # -- Controls hint --
+    hint = _font_sm.render("WASD / Arrows  |  ENTER to select", False, C_DIM)
     screen.blit(hint, hint.get_rect(centerx=cx, centery=h - 32))
 
 
@@ -491,6 +491,18 @@ def set_hovered(card) -> None:
     """Call each frame from main.py with the card under the mouse (or None)."""
     global _hovered_card_id
     _hovered_card_id = id(card) if card is not None else -1
+
+
+# ---------------------------------------------------------------------------
+# Keyboard cursor tracking
+# ---------------------------------------------------------------------------
+_cursor_grid_pos: tuple[int, int] | None = None
+
+
+def set_cursor(grid_pos: tuple[int, int] | None) -> None:
+    """Set the current keyboard-cursor grid cell, or None to hide the cursor."""
+    global _cursor_grid_pos
+    _cursor_grid_pos = grid_pos
 
 
 # ---------------------------------------------------------------------------
@@ -555,6 +567,36 @@ def draw_card(
         # Sharp inner border
         pygame.draw.rect(screen, C_ACCENT, hr, width=border_w, border_radius=3)
 
+    # Keyboard cursor highlight — bright solid corner-bracket frame, animated dash
+    if _cursor_grid_pos is not None and card.grid_pos == _cursor_grid_pos:
+        t_dash = (pygame.time.get_ticks() % 600) / 600.0
+        pulse2 = (math.sin(t_dash * 2 * math.pi) + 1) / 2   # 0->1
+        # Solid bright-white inner border
+        kb_rect = pygame.Rect(bx, rect.y, dw, card_h)
+        pygame.draw.rect(screen, C_WHITE, kb_rect, width=2, border_radius=3)
+        # Corner brackets — four L-shaped marks in neon magenta
+        arm = max(6, dw // 5)   # bracket arm length scales with card width
+        thickness = 2
+        corners = [
+            (bx,          rect.y),           # top-left
+            (bx + dw - 1, rect.y),           # top-right
+            (bx,          rect.y + card_h - 1),  # bottom-left
+            (bx + dw - 1, rect.y + card_h - 1),  # bottom-right
+        ]
+        dirs = [
+            ( 1,  1), (-1,  1),
+            ( 1, -1), (-1, -1),
+        ]
+        for (cx_c, cy_c), (dx, dy) in zip(corners, dirs):
+            pygame.draw.line(screen, C_ACCENT, (cx_c, cy_c), (cx_c + dx * arm, cy_c), thickness)
+            pygame.draw.line(screen, C_ACCENT, (cx_c, cy_c), (cx_c, cy_c + dy * arm), thickness)
+        # Pulsing outer glow ring
+        glow_a2 = int(60 + pulse2 * 100)
+        pad2 = 5 + int(pulse2 * 3)
+        glow2 = pygame.Surface((dw + pad2 * 2, card_h + pad2 * 2), pygame.SRCALPHA)
+        pygame.draw.rect(glow2, (*C_WHITE, glow_a2), glow2.get_rect(), border_radius=6)
+        screen.blit(glow2, (bx - pad2, rect.y - pad2))
+
 
 def draw_card_grid(
     screen: pygame.Surface,
@@ -562,7 +604,9 @@ def draw_card_grid(
     card_w: int,
     card_h: int,
     multiplier: float = 1.0,
+    cursor_pos: tuple[int, int] | None = None,
 ) -> None:
+    set_cursor(cursor_pos)
     for card in cards:
         draw_card(screen, card, card_w, card_h)
 
@@ -733,6 +777,13 @@ def draw_hud(
 # ---------------------------------------------------------------------------
 
 def draw_esc_hint(screen: pygame.Surface) -> None:
-    hint_font = get_gothic_font(22)
-    hint      = hint_font.render("ESC - MENU", False, C_DIM)
-    screen.blit(hint, (10, screen.get_height() - hint.get_height() - 8))
+    hint_font = get_gothic_font(18)
+    lines = [
+        "ESC - MENU",
+        "WASD / Arrow Keys - move   SPACE - flip card",
+    ]
+    y = screen.get_height() - hint_font.get_height() * len(lines) - 10
+    for line in lines:
+        surf = hint_font.render(line, False, C_DIM)
+        screen.blit(surf, (10, y))
+        y += hint_font.get_height() + 2

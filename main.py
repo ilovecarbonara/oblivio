@@ -85,9 +85,13 @@ def main() -> None:
     grid_selected   = 0        # 0=Easy  1=Medium  2=Hard
     result_selected = 0        # 0=Play Again  1=Main Menu
     frame           = 0
-    
+
     current_cw      = CARD_W
     current_ch      = CARD_H
+
+    # Keyboard cursor for card selection during PLAYING state.
+    # Tracks (col, row) within the active grid; None when not playing.
+    cursor_pos: tuple[int, int] | None = None
 
     running = True
     dt_ms   = 0.0          # milliseconds since last frame
@@ -113,6 +117,9 @@ def main() -> None:
                         menu_selected = (menu_selected - 1) % len(ui.MENU_ITEMS)
                     elif game.state == GameState.GRID_SELECT:
                         grid_selected = (grid_selected - 1) % 3
+                    elif game.state == GameState.PLAYING and cursor_pos is not None:
+                        cx, cy = cursor_pos
+                        cursor_pos = (cx, max(0, cy - 1))
                     elif game.state in (GameState.GAME_OVER, GameState.WIN):
                         result_selected = (result_selected - 1) % 2
 
@@ -121,8 +128,21 @@ def main() -> None:
                         menu_selected = (menu_selected + 1) % len(ui.MENU_ITEMS)
                     elif game.state == GameState.GRID_SELECT:
                         grid_selected = (grid_selected + 1) % 3
+                    elif game.state == GameState.PLAYING and cursor_pos is not None:
+                        cx, cy = cursor_pos
+                        cursor_pos = (cx, min(game.difficulty.rows - 1, cy + 1))
                     elif game.state in (GameState.GAME_OVER, GameState.WIN):
                         result_selected = (result_selected + 1) % 2
+
+                elif event.key in (pygame.K_LEFT, pygame.K_a):
+                    if game.state == GameState.PLAYING and cursor_pos is not None:
+                        cx, cy = cursor_pos
+                        cursor_pos = (max(0, cx - 1), cy)
+
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    if game.state == GameState.PLAYING and cursor_pos is not None:
+                        cx, cy = cursor_pos
+                        cursor_pos = (min(game.difficulty.cols - 1, cx + 1), cy)
 
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                     if game.state == GameState.MENU:
@@ -137,7 +157,22 @@ def main() -> None:
                         current_cw, current_ch, origin = get_grid_layout(diff)
                         cards = grid.generate_grid(diff, current_cw, current_ch, PADDING, origin)
                         game.start_game(diff, cards)
+                        cursor_pos = (0, 0)   # reset keyboard cursor to top-left
                         print(f"[INFO] Game started — difficulty: {diff.label} ({diff.cols}×{diff.rows})")
+
+                    elif game.state == GameState.PLAYING and event.key == pygame.K_SPACE:
+                        # Activate card under the keyboard cursor
+                        if cursor_pos is not None and not game.lock_input:
+                            target = next(
+                                (c for c in game.cards if c.grid_pos == cursor_pos),
+                                None,
+                            )
+                            if target is not None:
+                                clicked = game.handle_click(target.rect.center)
+                                if clicked and not ui.is_flipping(clicked):
+                                    result = game.flip_card(clicked)
+                                    if result is not None:
+                                        ui.start_flip(clicked)
 
                     elif game.state in (GameState.GAME_OVER, GameState.WIN):
                         if result_selected == 0: # PLAY AGAIN
@@ -145,9 +180,11 @@ def main() -> None:
                             current_cw, current_ch, origin = get_grid_layout(diff)
                             cards = grid.generate_grid(diff, current_cw, current_ch, PADDING, origin)
                             game.start_game(diff, cards)
+                            cursor_pos = (0, 0)   # reset keyboard cursor
                             print(f"[INFO] Restarted — difficulty: {diff.label} ({diff.cols}×{diff.rows})")
                         else:                    # MAIN MENU
                             game.to_menu()
+                            cursor_pos = None
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if game.state == GameState.PLAYING:
@@ -205,7 +242,11 @@ def main() -> None:
                         break
             ui.set_hovered(hovered)
 
-            ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier)
+            # If the mouse moved, sync cursor_pos to the card under the pointer
+            if hovered is not None:
+                cursor_pos = hovered.grid_pos
+
+            ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, cursor_pos)
             ui.draw_esc_hint(screen)
 
         elif game.state == GameState.GRID_SELECT:
