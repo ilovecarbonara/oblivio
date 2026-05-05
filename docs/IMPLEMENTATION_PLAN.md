@@ -28,20 +28,20 @@
 
 ### Jim (Visuals / UI)
 
-- [X] Source a pixel art playing card sprite sheet (all 52 cards + card back) from itch.io or OpenGameArt
-- [ ] Source a pixel art background image (dark arcade-style)
-- [ ] Set up `assets/images/` and `assets/audio/` directories
-- [ ] Slice/organize card sprites into individual files or set up a sprite sheet loader
-- [ ] Render a static grid of face-down cards on screen using placeholder or sourced card-back sprites
-- [ ] Draw the HUD layout skeleton on the game screen (HP bar placeholder on top-left, score placeholder on top-right)
+- [x] Source a pixel art playing card sprite sheet (all 52 cards + card back) from itch.io or OpenGameArt
+- [x] Source a pixel art background image (dark arcade-style)
+- [x] Set up `assets/images/` and `assets/audio/` directories
+- [x] Slice/organize card sprites into individual files or set up a sprite sheet loader
+- [x] Render a static grid of face-down cards on screen using placeholder or sourced card-back sprites
+- [x] Draw the HUD layout skeleton on the game screen (HP bar placeholder on top-left, score placeholder on top-right)
 
 **Branch:** `week-1/Jim/assets-and-static-rendering`
 
 ### End-of-Week Merge Checklist
 
-- [ ] Both branches merged to `main`
-- [ ] Game launches, shows a window with a grid of face-down cards
-- [ ] Clicking a card prints its position to the console (debug confirmation)
+- [x] Both branches merged to `main`
+- [x] Game launches, shows a window with a grid of face-down cards
+- [x] Clicking a card prints its position to the console (debug confirmation)
 
 ---
 
@@ -65,22 +65,22 @@
 - [x] Render face-up cards using the correct sprite for each card's suit and rank
 - [x] Visually distinguish the three card states: face-down (card back), face-up (card front), matched (card front + glow/highlight border)
 - [x] Add a brief visual indicator for mismatches before cards flip back (e.g., red tint or shake)
-- [ ] Ensure the grid is centered on screen and cards are evenly spaced for all three grid sizes (4×4, 6×6, 8×8)
-- [ ] Add card hover effect (subtle highlight or cursor change when hovering over a clickable card)
-- [ ] Source and implement a final custom font that better matches the dark retro-horror theme (replacing the system fallback)
-- [ ] Source and implement a new pixelate visual effect for matched cards (replacing the magenta pulse)
-- [ ] Source a new, dynamic health bar asset
-- [ ] Redesign and fancy-up the live scoreboard UI
-- [ ] **[Moved from Jay's W4]** Source audio assets: BGM (Menu & In-game)
-- [ ] Source an updated, more legible pixel art card sprite sheet (current numbers are hard to read)
+- [x] Ensure the grid is centered on screen and cards are evenly spaced for all three grid sizes (4×4, 6×6, 8×8)
+- [x] Add card hover effect (subtle highlight or cursor change when hovering over a clickable card)
+- [x] Source and implement a final custom font that better matches the dark retro-horror theme (replacing the system fallback)
+- [x] Source and implement a new pixelate visual effect for matched cards (replacing the magenta pulse)
+- [~] Source a new, dynamic health bar asset
+- [x] Redesign and fancy-up the live scoreboard UI
+- [x] **[Moved from Jay's W4]** Source audio assets: BGM (Menu & In-game)
+- [x] Source an updated, more legible pixel art card sprite sheet (current numbers are hard to read)
 
 **Branch:** `week-2/Jim/card-visuals-and-states`
 
 ### End-of-Week Merge Checklist
 
-- [ ] Both branches merged to `main`
-- [ ] Full flip-and-match gameplay loop works: click two cards → match or mismatch → continue
-- [ ] All three grid sizes render correctly with proper card sprites
+- [x] Both branches merged to `main`
+- [x] Full flip-and-match gameplay loop works: click two cards → match or mismatch → continue
+- [x] All three grid sizes render correctly with proper card sprites
 
 ---
 
