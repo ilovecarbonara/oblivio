@@ -308,6 +308,60 @@ def _flip_scale(card) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Screen transition  —  fade to black, fire callback at peak, fade back in
+# ---------------------------------------------------------------------------
+_trans_active:   bool  = False
+_trans_phase:    str   = "in"    # "in" | "out"
+_trans_alpha:    float = 0.0
+_trans_callback          = None
+_TRANS_SPEED:    float = 10.0    # alpha units per frame  (255/10 = ~25 frames each way)
+
+
+def start_transition(callback) -> None:
+    """
+    Begin a fade-to-black transition.
+    *callback* is called once the screen is fully black (at peak).
+    After the callback fires the overlay fades back out.
+    Input should be blocked while is_transition_active() is True.
+    """
+    global _trans_active, _trans_phase, _trans_alpha, _trans_callback
+    _trans_active   = True
+    _trans_phase    = "in"
+    _trans_alpha    = 0.0
+    _trans_callback = callback
+
+
+def is_transition_active() -> bool:
+    return _trans_active
+
+
+def update_transition() -> None:
+    global _trans_active, _trans_phase, _trans_alpha, _trans_callback
+    if not _trans_active:
+        return
+    if _trans_phase == "in":
+        _trans_alpha = min(255.0, _trans_alpha + _TRANS_SPEED)
+        if _trans_alpha >= 255.0:
+            if _trans_callback:
+                _trans_callback()
+                _trans_callback = None
+            _trans_phase = "out"
+    else:
+        _trans_alpha = max(0.0, _trans_alpha - _TRANS_SPEED)
+        if _trans_alpha <= 0.0:
+            _trans_active = False
+
+
+def draw_transition(screen: pygame.Surface) -> None:
+    """Draw the black fade overlay. Call this AFTER all other rendering."""
+    if not _trans_active or _trans_alpha <= 0:
+        return
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, int(_trans_alpha)))
+    screen.blit(overlay, (0, 0))
+
+
+# ---------------------------------------------------------------------------
 # Mismatch flash
 # ---------------------------------------------------------------------------
 _flash:  dict[int, float] = {}
