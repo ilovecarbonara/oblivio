@@ -36,6 +36,8 @@ class GameState(Enum):
     MENU        = auto()   # Main menu is visible
     GRID_SELECT = auto()   # Selecting difficulty
     PLAYING     = auto()   # Active gameplay
+    PAUSED      = auto()   # Game frozen — pause overlay visible
+    OPTIONS     = auto()   # Options menu visible
     GAME_OVER   = auto()   # HP reached 0
     WIN         = auto()   # All pairs matched
 
@@ -165,6 +167,26 @@ class Game:
         self.hp             = HPBar()
         self.score          = Score()
         self._turn_start_ticks = 0
+
+    def to_pause(self) -> None:
+        """Freeze gameplay and show the pause overlay."""
+        if self.state == GameState.PLAYING:
+            self._pre_pause_state = GameState.PLAYING
+            self.state = GameState.PAUSED
+
+    def resume(self) -> None:
+        """Resume gameplay from the pause overlay."""
+        if self.state == GameState.PAUSED:
+            self.state = GameState.PLAYING
+
+    def to_options(self, origin_state: 'GameState') -> None:
+        """Enter the options menu, remembering which state we came from."""
+        self._options_origin = origin_state
+        self.state = GameState.OPTIONS
+
+    def from_options(self) -> None:
+        """Return from options to wherever we came from."""
+        self.state = getattr(self, '_options_origin', GameState.MENU)
 
     # ------------------------------------------------------------------
     # Input handling

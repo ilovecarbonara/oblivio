@@ -15,14 +15,13 @@ from card import Card, CardState
 from game import Game, GameState, Difficulty
 import grid
 import ui
+import settings as cfg
 
 
 # ---------------------------------------------------------------------------
 # Window / display constants
 # ---------------------------------------------------------------------------
 WINDOW_TITLE = "Oblivio"
-WINDOW_W     = 1024
-WINDOW_H     = 768
 TARGET_FPS   = 60
 
 # ---------------------------------------------------------------------------
@@ -40,10 +39,10 @@ HUD_H    = 60   # height reserved at top for HP bar / score (Jim's HUD area)
 # Helper
 # ---------------------------------------------------------------------------
 
-def get_grid_layout(diff: Difficulty) -> tuple[int, int, tuple[int, int]]:
+def get_grid_layout(diff: Difficulty, win_w: int, win_h: int) -> tuple[int, int, tuple[int, int]]:
     """Return (card_w, card_h, origin_xy) dynamically scaled to fit the screen."""
-    max_w = WINDOW_W - 80
-    max_h = WINDOW_H - HUD_H - 40
+    max_w = win_w - 80
+    max_h = win_h - HUD_H - 40
     cw_w = (max_w - (diff.cols - 1) * PADDING) / diff.cols
     cw_h = (max_h - (diff.rows - 1) * PADDING) / (diff.rows * 4 / 3)
     
@@ -53,10 +52,61 @@ def get_grid_layout(diff: Difficulty) -> tuple[int, int, tuple[int, int]]:
     grid_w = diff.cols * cw + (diff.cols - 1) * PADDING
     grid_h = diff.rows * ch + (diff.rows - 1) * PADDING
     origin = (
-        (WINDOW_W - grid_w) // 2,
-        HUD_H + (WINDOW_H - HUD_H - grid_h) // 2,
+        (win_w - grid_w) // 2,
+        HUD_H + (win_h - HUD_H - grid_h) // 2,
     )
     return cw, ch, origin
+
+
+def _reposition_grid(game: Game, current_cw: int, current_ch: int, win_w: int, win_h: int) -> tuple[int, int]:
+    """Recalculate card pixel positions after a resolution change (preserves card states)."""
+    if not game.cards:
+        return current_cw, current_ch
+
+    new_cw, new_ch, origin = get_grid_layout(game.difficulty, win_w, win_h)
+    for card in game.cards:
+        col, row = card.grid_pos
+        px = origin[0] + col * (new_cw + PADDING)
+        py = origin[1] + row * (new_ch + PADDING)
+        card.rect = pygame.Rect(px, py, new_cw, new_ch)
+    return new_cw, new_ch
+
+
+# ---------------------------------------------------------------------------
+# Options-menu input helpers
+# ---------------------------------------------------------------------------
+_OPTIONS_ROW_COUNT = 6   # rows 0-4 = settings, row 5 = APPLY & BACK
+
+
+def _options_adjust(row: int, direction: int) -> None:
+    """
+    Adjust the setting on the given row by *direction* (-1 = left, +1 = right).
+    Immediately saves to JSON after every change.
+    Audio changes are applied instantly; display changes wait for APPLY & BACK.
+    """
+    if row == 0:  # Display Mode
+        cfg.display_mode = (cfg.display_mode + direction) % len(cfg.DISPLAY_MODES)
+        cfg.save()
+
+    elif row == 1:  # Resolution
+        cfg.resolution = (cfg.resolution + direction) % len(cfg.RESOLUTIONS)
+        cfg.save()
+
+    elif row == 2:  # Master Volume
+        cfg.master_volume = round(max(0.0, min(1.0, cfg.master_volume + direction * 0.1)), 2)
+        cfg.save()
+        cfg.apply_audio()
+
+    elif row == 3:  # Music Volume
+        cfg.music_volume = round(max(0.0, min(1.0, cfg.music_volume + direction * 0.1)), 2)
+        cfg.save()
+        cfg.apply_audio()
+
+    elif row == 4:  # SFX Volume
+        cfg.sfx_volume = round(max(0.0, min(1.0, cfg.sfx_volume + direction * 0.1)), 2)
+        cfg.save()
+        # SFX playback not implemented yet — volume stored for future use
+
 
 # ---------------------------------------------------------------------------
 # Main
@@ -66,8 +116,15 @@ def main() -> None:
     pygame.init()
     pygame.mixer.init()
     pygame.display.set_caption(WINDOW_TITLE)
-    screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
-    clock  = pygame.time.Clock()
+
+    # Load and apply persistent settings
+    cfg.load()
+    screen = cfg.apply_display(pygame.display.set_mode(cfg.current_resolution()))
+    cfg.apply_audio()
+
+    win_w, win_h = screen.get_size()
+
+    clock = pygame.time.Clock()
 
     # BGM path
     _BGM_MENU = os.path.join(
@@ -81,9 +138,12 @@ def main() -> None:
     ui.load_health_sprites()
 
     game            = Game()   # starts in MENU state
-    menu_selected   = 0        # 0=PLAY  1=QUIT
+    menu_selected   = 0        # 0=PLAY  1=OPTIONS  2=QUIT
     grid_selected   = 0        # 0=Easy  1=Medium  2=Hard
     result_selected = 0        # 0=Play Again  1=Main Menu
+    pause_selected  = 0        # 0=Resume  1=Restart  2=Options
+    options_selected = 0       # 0-5 (rows in options menu)
+    options_origin  = "menu"   # "menu" or "pause" — where we came from
     frame           = 0
 
     current_cw      = CARD_W
@@ -105,13 +165,28 @@ def main() -> None:
 
             elif event.type == pygame.KEYDOWN:
 
+                # =====================================================
+                # ESC  —  context-dependent
+                # =====================================================
                 if event.key == pygame.K_ESCAPE:
                     if game.state == GameState.PLAYING:
-                        game.to_menu()
-                        ui.reset_hp()
+                        game.to_pause()
+                        pause_selected = 0
+                    elif game.state == GameState.PAUSED:
+                        game.resume()
+                    elif game.state == GameState.OPTIONS:
+                        # Apply display changes when leaving options
+                        screen = cfg.apply_display(screen)
+                        win_w, win_h = screen.get_size()
+                        if game.cards:
+                            current_cw, current_ch = _reposition_grid(game, current_cw, current_ch, win_w, win_h)
+                        game.from_options()
                     else:
                         running = False
 
+                # =====================================================
+                # UP / W
+                # =====================================================
                 elif event.key in (pygame.K_UP, pygame.K_w):
                     if game.state == GameState.MENU:
                         menu_selected = (menu_selected - 1) % len(ui.MENU_ITEMS)
@@ -122,7 +197,14 @@ def main() -> None:
                         cursor_pos = (cx, max(0, cy - 1))
                     elif game.state in (GameState.GAME_OVER, GameState.WIN):
                         result_selected = (result_selected - 1) % 2
+                    elif game.state == GameState.PAUSED:
+                        pause_selected = (pause_selected - 1) % len(ui.PAUSE_ITEMS)
+                    elif game.state == GameState.OPTIONS:
+                        options_selected = (options_selected - 1) % _OPTIONS_ROW_COUNT
 
+                # =====================================================
+                # DOWN / S
+                # =====================================================
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
                     if game.state == GameState.MENU:
                         menu_selected = (menu_selected + 1) % len(ui.MENU_ITEMS)
@@ -133,35 +215,59 @@ def main() -> None:
                         cursor_pos = (cx, min(game.difficulty.rows - 1, cy + 1))
                     elif game.state in (GameState.GAME_OVER, GameState.WIN):
                         result_selected = (result_selected + 1) % 2
+                    elif game.state == GameState.PAUSED:
+                        pause_selected = (pause_selected + 1) % len(ui.PAUSE_ITEMS)
+                    elif game.state == GameState.OPTIONS:
+                        options_selected = (options_selected + 1) % _OPTIONS_ROW_COUNT
 
+                # =====================================================
+                # LEFT / A
+                # =====================================================
                 elif event.key in (pygame.K_LEFT, pygame.K_a):
                     if game.state == GameState.PLAYING and cursor_pos is not None:
                         cx, cy = cursor_pos
                         cursor_pos = (max(0, cx - 1), cy)
+                    elif game.state == GameState.OPTIONS:
+                        _options_adjust(options_selected, -1)
 
+                # =====================================================
+                # RIGHT / D
+                # =====================================================
                 elif event.key in (pygame.K_RIGHT, pygame.K_d):
                     if game.state == GameState.PLAYING and cursor_pos is not None:
                         cx, cy = cursor_pos
                         cursor_pos = (min(game.difficulty.cols - 1, cx + 1), cy)
+                    elif game.state == GameState.OPTIONS:
+                        _options_adjust(options_selected, +1)
 
+                # =====================================================
+                # ENTER / SPACE
+                # =====================================================
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+
+                    # --- Main Menu ---
                     if game.state == GameState.MENU:
-                        if menu_selected == 1:   # QUIT
-                            running = False
-                        else:                    # PLAY
+                        if menu_selected == 0:         # PLAY
                             game.to_grid_select()
                             grid_selected = 0
+                        elif menu_selected == 1:       # OPTIONS
+                            options_origin = "menu"
+                            options_selected = 0
+                            game.to_options(GameState.MENU)
+                        elif menu_selected == 2:       # QUIT
+                            running = False
 
+                    # --- Grid Select ---
                     elif game.state == GameState.GRID_SELECT:
                         diff = list(Difficulty)[grid_selected]
-                        current_cw, current_ch, origin = get_grid_layout(diff)
+                        current_cw, current_ch, origin = get_grid_layout(diff, win_w, win_h)
                         cards = grid.generate_grid(diff, current_cw, current_ch, PADDING, origin)
                         game.start_game(diff, cards)
                         cursor_pos = (0, 0)   # reset keyboard cursor to top-left
                         print(f"[INFO] Game started — difficulty: {diff.label} ({diff.cols}×{diff.rows})")
 
+                    # --- Playing (SPACE only — flip card) ---
                     elif game.state == GameState.PLAYING and event.key == pygame.K_SPACE:
-                        # Activate card under the keyboard cursor
                         if cursor_pos is not None and not game.lock_input:
                             target = next(
                                 (c for c in game.cards if c.grid_pos == cursor_pos),
@@ -174,15 +280,42 @@ def main() -> None:
                                     if result is not None:
                                         ui.start_flip(clicked)
 
-                    elif game.state in (GameState.GAME_OVER, GameState.WIN):
-                        if result_selected == 0: # PLAY AGAIN
+                    # --- Paused ---
+                    elif game.state == GameState.PAUSED:
+                        if pause_selected == 0:        # RESUME
+                            game.resume()
+                        elif pause_selected == 1:      # RESTART
                             diff = game.difficulty
-                            current_cw, current_ch, origin = get_grid_layout(diff)
+                            current_cw, current_ch, origin = get_grid_layout(diff, win_w, win_h)
                             cards = grid.generate_grid(diff, current_cw, current_ch, PADDING, origin)
                             game.start_game(diff, cards)
-                            cursor_pos = (0, 0)   # reset keyboard cursor
+                            ui.reset_hp()
+                            cursor_pos = (0, 0)
                             print(f"[INFO] Restarted — difficulty: {diff.label} ({diff.cols}×{diff.rows})")
-                        else:                    # MAIN MENU
+                        elif pause_selected == 2:      # OPTIONS
+                            options_origin = "pause"
+                            options_selected = 0
+                            game.to_options(GameState.PAUSED)
+
+                    # --- Options ---
+                    elif game.state == GameState.OPTIONS:
+                        if options_selected == 5:      # APPLY & BACK
+                            screen = cfg.apply_display(screen)
+                            win_w, win_h = screen.get_size()
+                            if game.cards:
+                                current_cw, current_ch = _reposition_grid(game, current_cw, current_ch, win_w, win_h)
+                            game.from_options()
+
+                    # --- Game Over / Win ---
+                    elif game.state in (GameState.GAME_OVER, GameState.WIN):
+                        if result_selected == 0:       # PLAY AGAIN
+                            diff = game.difficulty
+                            current_cw, current_ch, origin = get_grid_layout(diff, win_w, win_h)
+                            cards = grid.generate_grid(diff, current_cw, current_ch, PADDING, origin)
+                            game.start_game(diff, cards)
+                            cursor_pos = (0, 0)
+                            print(f"[INFO] Restarted — difficulty: {diff.label} ({diff.cols}×{diff.rows})")
+                        else:                          # MAIN MENU
                             game.to_menu()
                             cursor_pos = None
 
@@ -210,13 +343,17 @@ def main() -> None:
         frame += 1
 
         # -------------------------------------------------- BGM management
-        if game.state in (GameState.MENU, GameState.GRID_SELECT):
+        if game.state in (GameState.MENU, GameState.GRID_SELECT,
+                          GameState.OPTIONS) and options_origin == "menu":
             if _music_state != "menu":
                 _music_state = "menu"
                 if os.path.exists(_BGM_MENU):
                     pygame.mixer.music.load(_BGM_MENU)
-                    pygame.mixer.music.set_volume(0.6)
+                    pygame.mixer.music.set_volume(cfg.effective_music_vol())
                     pygame.mixer.music.play(-1)   # -1 = loop forever
+        elif game.state == GameState.OPTIONS and options_origin == "pause":
+            # Keep game music state unchanged while in pause-options
+            pass
         else:
             if _music_state == "menu":
                 _music_state = "game"
@@ -249,6 +386,18 @@ def main() -> None:
             ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, cursor_pos)
             ui.draw_esc_hint(screen)
 
+        elif game.state == GameState.PAUSED:
+            # Draw the frozen game underneath
+            ui.draw_game_bg(screen, frame // 4)
+            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
+            ui.set_hovered(None)
+            ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, cursor_pos)
+            # Pause overlay on top
+            ui.draw_pause_overlay(screen, pause_selected, frame)
+
+        elif game.state == GameState.OPTIONS:
+            ui.draw_options_menu(screen, cfg, options_selected, frame, options_origin)
+
         elif game.state == GameState.GRID_SELECT:
             # [TEMP MOCKUP — JAY: Replace with full screen in Week 3]
             ui.draw_game_bg(screen, frame // 4)
@@ -256,11 +405,11 @@ def main() -> None:
             item_font    = ui.get_gothic_font(24)
 
             hd = heading_font.render("SELECT DIFFICULTY", False, (255, 255, 255))
-            screen.blit(hd, hd.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 - 120))
+            screen.blit(hd, hd.get_rect(centerx=win_w // 2, centery=win_h // 2 - 120))
 
             # Separator lines
-            sep_y = WINDOW_H // 2 - 75
-            pygame.draw.line(screen, (243, 2, 97), (WINDOW_W // 2 - 240, sep_y), (WINDOW_W // 2 + 240, sep_y), 2)
+            sep_y = win_h // 2 - 75
+            pygame.draw.line(screen, (243, 2, 97), (win_w // 2 - 240, sep_y), (win_w // 2 + 240, sep_y), 2)
 
             diffs = ["Easy  (4x4)", "Medium  (6x6)", "Hard  (8x8)"]
             for i, d in enumerate(diffs):
@@ -268,14 +417,14 @@ def main() -> None:
                 color  = (243, 2, 97) if is_sel else (90, 70, 100)
                 label  = f"> {d} <" if is_sel else d
                 ds = item_font.render(label, False, color)
-                dy = WINDOW_H // 2 - 20 + i * 60
+                dy = win_h // 2 - 20 + i * 60
                 if is_sel:
-                    box = pygame.Rect(WINDOW_W // 2 - ds.get_width() // 2 - 20,
+                    box = pygame.Rect(win_w // 2 - ds.get_width() // 2 - 20,
                                       dy - ds.get_height() // 2 - 8,
                                       ds.get_width() + 40, ds.get_height() + 16)
                     pygame.draw.rect(screen, (25, 2, 14), box)
                     pygame.draw.rect(screen, (243, 2, 97), box, 2)
-                screen.blit(ds, ds.get_rect(centerx=WINDOW_W // 2, centery=dy))
+                screen.blit(ds, ds.get_rect(centerx=win_w // 2, centery=dy))
 
         elif game.state in (GameState.GAME_OVER, GameState.WIN):
             # Week 3 Jim screens replace this placeholder
@@ -292,16 +441,16 @@ def main() -> None:
             label = "GAME OVER" if game.state == GameState.GAME_OVER else "YOU WIN!"
             color = (200, 40, 40) if game.state == GameState.GAME_OVER else (232, 24, 90)
             ts    = big.render(label, False, color)
-            screen.blit(ts, ts.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 - 40))
+            screen.blit(ts, ts.get_rect(centerx=win_w // 2, centery=win_h // 2 - 40))
             sc = sml.render(f"SCORE: {game.score.total}", False, (200, 200, 200))
-            screen.blit(sc, sc.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2))
+            screen.blit(sc, sc.get_rect(centerx=win_w // 2, centery=win_h // 2))
 
             opts = ["PLAY AGAIN", "MAIN MENU"]
             for i, o in enumerate(opts):
                 color = (243, 2, 97) if i == result_selected else (90, 70, 100)
                 text = f"> {o} <" if i == result_selected else o
                 os_surf = sml.render(text, False, color)
-                screen.blit(os_surf, os_surf.get_rect(centerx=WINDOW_W // 2, centery=WINDOW_H // 2 + 60 + i * 30))
+                screen.blit(os_surf, os_surf.get_rect(centerx=win_w // 2, centery=win_h // 2 + 60 + i * 30))
 
         # Screen shake post-process — shift entire frame then black-fill edges
         ox, oy = ui.get_screen_shake_offset()
