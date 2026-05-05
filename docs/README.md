@@ -4,6 +4,11 @@ A single-player pixel art memory card matching game built with Python and Pygame
 
 ---
 
+# Owners
+- Gomez | Dejito
+
+---
+
 ## About
 
 Oblivio is a classic flip-and-match card game wrapped in a retro pixel art aesthetic. Find all matching pairs of playing cards before your HP runs out. Match fast to earn bonus points!
