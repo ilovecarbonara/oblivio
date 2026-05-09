@@ -849,7 +849,7 @@ def draw_esc_hint(screen: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 # Pause overlay  —  drawn ON TOP of the frozen game frame
 # ---------------------------------------------------------------------------
-PAUSE_ITEMS = ["RESUME", "RESTART", "OPTIONS"]
+PAUSE_ITEMS = ["RESUME", "RESTART", "OPTIONS", "QUIT"]
 _pause_rects: list[pygame.Rect] = []
 
 def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> None:

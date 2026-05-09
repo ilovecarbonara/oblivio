@@ -232,6 +232,19 @@ def main() -> None:
                         if game.cards:
                             current_cw, current_ch = _reposition_grid(game, current_cw, current_ch, win_w, win_h)
                         game.from_options()
+                    elif game.state == GameState.GRID_SELECT:
+                        audio.sfx_cancel()
+                        def _to_menu_cb():
+                            game.to_menu()
+                        ui.start_transition(_to_menu_cb)
+                    elif game.state in (GameState.GAME_OVER, GameState.WIN):
+                        audio.sfx_cancel()
+                        def _to_menu_cb():
+                            nonlocal cursor_pos
+                            game.to_menu()
+                            cursor_pos = None
+                            audio.bgm_play_menu()
+                        ui.start_transition(_to_menu_cb)
                     else:
                         running = False
 
@@ -242,7 +255,7 @@ def main() -> None:
                     if game.state == GameState.MENU:
                         menu_selected = (menu_selected - 1) % len(ui.MENU_ITEMS)
                     elif game.state == GameState.GRID_SELECT:
-                        grid_selected = (grid_selected - 1) % 3
+                        grid_selected = (grid_selected - 1) % 4
                     elif game.state == GameState.PLAYING and cursor_pos is not None:
                         cx, cy = cursor_pos
                         cursor_pos = (cx, max(0, cy - 1))
@@ -260,7 +273,7 @@ def main() -> None:
                     if game.state == GameState.MENU:
                         menu_selected = (menu_selected + 1) % len(ui.MENU_ITEMS)
                     elif game.state == GameState.GRID_SELECT:
-                        grid_selected = (grid_selected + 1) % 3
+                        grid_selected = (grid_selected + 1) % 4
                     elif game.state == GameState.PLAYING and cursor_pos is not None:
                         cx, cy = cursor_pos
                         cursor_pos = (cx, min(game.difficulty.rows - 1, cy + 1))
@@ -313,20 +326,26 @@ def main() -> None:
 
                     # --- Grid Select ---
                     elif game.state == GameState.GRID_SELECT and not ui.is_transition_active():
-                        diff = list(Difficulty)[grid_selected]
-                        audio.sfx_select()
-                        # Capture locals for the closure
-                        _diff = diff
-                        def _start_game_cb():
-                            nonlocal current_cw, current_ch, cursor_pos
-                            _cw, _ch, _origin = get_grid_layout(_diff, win_w, win_h)
-                            current_cw, current_ch = _cw, _ch
-                            _cards = grid.generate_grid(_diff, _cw, _ch, PADDING, _origin)
-                            game.start_game(_diff, _cards)
-                            cursor_pos = (0, 0)
-                            audio.bgm_play_game(_diff.label)
-                            print(f"[INFO] Game started — difficulty: {_diff.label} ({_diff.cols}×{_diff.rows})")
-                        ui.start_transition(_start_game_cb)
+                        if grid_selected == 3:  # Back
+                            audio.sfx_cancel()
+                            def _to_menu_cb():
+                                game.to_menu()
+                            ui.start_transition(_to_menu_cb)
+                        else:
+                            diff = list(Difficulty)[grid_selected]
+                            audio.sfx_select()
+                            # Capture locals for the closure
+                            _diff = diff
+                            def _start_game_cb():
+                                nonlocal current_cw, current_ch, cursor_pos
+                                _cw, _ch, _origin = get_grid_layout(_diff, win_w, win_h)
+                                current_cw, current_ch = _cw, _ch
+                                _cards = grid.generate_grid(_diff, _cw, _ch, PADDING, _origin)
+                                game.start_game(_diff, _cards)
+                                cursor_pos = (0, 0)
+                                audio.bgm_play_game(_diff.label)
+                                print(f"[INFO] Game started — difficulty: {_diff.label} ({_diff.cols}×{_diff.rows})")
+                            ui.start_transition(_start_game_cb)
 
                     # --- Playing (SPACE only — flip card) ---
                     elif game.state == GameState.PLAYING and event.key == pygame.K_SPACE:
@@ -367,6 +386,14 @@ def main() -> None:
                             options_origin = "pause"
                             options_selected = 0
                             game.to_options(GameState.PAUSED)
+                        elif pause_selected == 3:      # QUIT
+                            audio.sfx_cancel()
+                            def _quit_cb():
+                                nonlocal cursor_pos
+                                game.to_menu()
+                                cursor_pos = None
+                                audio.bgm_play_menu()
+                            ui.start_transition(_quit_cb)
 
                     # --- Options ---
                     elif game.state == GameState.OPTIONS:
@@ -545,7 +572,7 @@ def main() -> None:
             sep_y = win_h // 2 - 75
             pygame.draw.line(screen, (243, 2, 97), (win_w // 2 - 240, sep_y), (win_w // 2 + 240, sep_y), 2)
 
-            diffs = ["Easy  (4x4)", "Medium  (6x6)", "Hard  (8x8)"]
+            diffs = ["Easy  (4x4)", "Medium  (6x6)", "Hard  (8x8)", "Back"]
             _grid_rects.clear()
             for i, d in enumerate(diffs):
                 is_sel = (i == grid_selected)
