@@ -165,6 +165,9 @@ def main() -> None:
     _prev_pause_sel:   int = pause_selected
     _prev_options_sel: int = options_selected
 
+    _grid_rects: list[pygame.Rect] = []
+    _result_rects: list[pygame.Rect] = []
+
     running = True
     dt_ms   = 0.0          # milliseconds since last frame
     while running:
@@ -174,6 +177,38 @@ def main() -> None:
 
             if event.type == pygame.QUIT:
                 running = False
+
+            elif event.type == pygame.MOUSEMOTION:
+                mx, my = event.pos
+                if game.state == GameState.MENU:
+                    idx = ui.get_hovered_menu_item(mx, my)
+                    if idx is not None: menu_selected = idx
+                elif game.state == GameState.PAUSED:
+                    idx = ui.get_hovered_pause_item(mx, my)
+                    if idx is not None: pause_selected = idx
+                elif game.state == GameState.OPTIONS:
+                    idx = ui.get_hovered_options_item(mx, my)
+                    if idx is not None: options_selected = idx
+                    
+                    # Handle slider dragging
+                    if pygame.mouse.get_pressed()[0] and options_selected in (2, 3, 4):
+                        value_x = (win_w // 2) + 40
+                        slider_w = 200
+                        if value_x - 20 <= mx <= value_x + slider_w + 20:
+                            pct = (mx - value_x) / slider_w
+                            pct = round(max(0.0, min(1.0, pct)), 2)
+                            if options_selected == 2: cfg.master_volume = pct
+                            elif options_selected == 3: cfg.music_volume = pct
+                            elif options_selected == 4: cfg.sfx_volume = pct
+                            cfg.save()
+                            cfg.apply_audio()
+                            
+                elif game.state == GameState.GRID_SELECT:
+                    for i, r in enumerate(_grid_rects):
+                        if r.collidepoint(mx, my): grid_selected = i
+                elif game.state in (GameState.GAME_OVER, GameState.WIN):
+                    for i, r in enumerate(_result_rects):
+                        if r.collidepoint(mx, my): result_selected = i
 
             elif event.type == pygame.KEYDOWN:
 
@@ -368,12 +403,53 @@ def main() -> None:
                             ui.start_transition(_to_menu_cb)
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mx, my = event.pos
                 if game.state == GameState.PLAYING:
                     clicked = game.handle_click(event.pos)
                     if clicked and not ui.is_flipping(clicked):
                         result = game.flip_card(clicked)
                         if result is not None:
                             ui.start_flip(clicked)
+                else:
+                    valid_click = False
+                    if game.state == GameState.MENU and ui.get_hovered_menu_item(mx, my) is not None:
+                        valid_click = True
+                    elif game.state == GameState.PAUSED and ui.get_hovered_pause_item(mx, my) is not None:
+                        valid_click = True
+                    elif game.state == GameState.GRID_SELECT and any(r.collidepoint(mx, my) for r in _grid_rects):
+                        valid_click = True
+                    elif game.state in (GameState.GAME_OVER, GameState.WIN) and any(r.collidepoint(mx, my) for r in _result_rects):
+                        valid_click = True
+                        
+                    if valid_click:
+                        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+                    elif game.state == GameState.OPTIONS:
+                        idx = ui.get_hovered_options_item(mx, my)
+                        if idx is not None:
+                            if idx == 5:
+                                pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+                            elif idx in (0, 1):
+                                value_x = (win_w // 2) + 40
+                                if mx < value_x + 80:
+                                    _options_adjust(idx, -1)
+                                else:
+                                    _options_adjust(idx, +1)
+                            elif idx in (2, 3, 4):
+                                value_x = (win_w // 2) + 40
+                                slider_w = 200
+                                if value_x <= mx <= value_x + slider_w:
+                                    pct = (mx - value_x) / slider_w
+                                    pct = round(max(0.0, min(1.0, pct)), 2)
+                                    if idx == 2: cfg.master_volume = pct
+                                    elif idx == 3: cfg.music_volume = pct
+                                    elif idx == 4: cfg.sfx_volume = pct
+                                    cfg.save()
+                                    cfg.apply_audio()
+                                else:
+                                    if mx < value_x + slider_w / 2:
+                                        _options_adjust(idx, -1)
+                                    else:
+                                        _options_adjust(idx, +1)
 
         # -------------------------------------------------- game logic tick
         mismatched = game.update(dt_ms)
@@ -470,16 +546,20 @@ def main() -> None:
             pygame.draw.line(screen, (243, 2, 97), (win_w // 2 - 240, sep_y), (win_w // 2 + 240, sep_y), 2)
 
             diffs = ["Easy  (4x4)", "Medium  (6x6)", "Hard  (8x8)"]
+            _grid_rects.clear()
             for i, d in enumerate(diffs):
                 is_sel = (i == grid_selected)
                 color  = (243, 2, 97) if is_sel else (90, 70, 100)
                 label  = f"> {d} <" if is_sel else d
                 ds = item_font.render(label, False, color)
                 dy = win_h // 2 - 20 + i * 60
+                
+                box = pygame.Rect(win_w // 2 - ds.get_width() // 2 - 20,
+                                  dy - ds.get_height() // 2 - 8,
+                                  ds.get_width() + 40, ds.get_height() + 16)
+                _grid_rects.append(box)
+                
                 if is_sel:
-                    box = pygame.Rect(win_w // 2 - ds.get_width() // 2 - 20,
-                                      dy - ds.get_height() // 2 - 8,
-                                      ds.get_width() + 40, ds.get_height() + 16)
                     pygame.draw.rect(screen, (25, 2, 14), box)
                     pygame.draw.rect(screen, (243, 2, 97), box, 2)
                 screen.blit(ds, ds.get_rect(centerx=win_w // 2, centery=dy))
@@ -504,11 +584,14 @@ def main() -> None:
             screen.blit(sc, sc.get_rect(centerx=win_w // 2, centery=win_h // 2))
 
             opts = ["PLAY AGAIN", "MAIN MENU"]
+            _result_rects.clear()
             for i, o in enumerate(opts):
                 color = (243, 2, 97) if i == result_selected else (90, 70, 100)
                 text = f"> {o} <" if i == result_selected else o
                 os_surf = sml.render(text, False, color)
-                screen.blit(os_surf, os_surf.get_rect(centerx=win_w // 2, centery=win_h // 2 + 60 + i * 30))
+                rect = os_surf.get_rect(centerx=win_w // 2, centery=win_h // 2 + 60 + i * 30)
+                screen.blit(os_surf, rect)
+                _result_rects.append(rect.inflate(40, 20))
 
         # Transition overlay (drawn last, on top of everything)
         ui.draw_transition(screen)

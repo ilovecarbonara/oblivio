@@ -1,32 +1,32 @@
-# Oblivio 🕹️
+# Oblivio
 
 A single-player pixel art memory card matching game built with Python and Pygame.
 
 ---
 
-## 👥 Owners
+## Owners
 - Gomez | Dejito
 
 ---
 
-## 📖 About
+## About
 
 Oblivio is a classic flip-and-match card game wrapped in a retro pixel art aesthetic. Find all matching pairs of playing cards before your HP runs out. Match fast to earn bonus points!
 
 ---
 
-## 🎮 Gameplay
+## Gameplay
 
 - Select a grid size (Easy / Medium / Hard) from the main menu.
 - Click any two cards to flip them.
-- If they match → they stay face-up. 🎉
-- If they don't → they flip back and you lose HP. 💔
+- If they match → they stay face-up.
+- If they don't → they flip back and you lose HP.
 - Match all pairs to win. Run out of HP to lose.
 - Your final score is displayed at the end.
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 Follow these steps to set up and run the game on your local machine.
 
@@ -66,7 +66,7 @@ Follow these steps to set up and run the game on your local machine.
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 The game automatically generates a `settings.json` file in the root directory the first time you run it. You can modify this file to change your default display mode, resolution, and volume settings. 
 
@@ -74,6 +74,6 @@ Because `settings.json` is your personal configuration, it is ignored by Git and
 
 ---
 
-## 🏗️ Team
+## Team
 
 Built as a learning project by a two-person team. Not intended for production release.

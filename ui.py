@@ -439,7 +439,7 @@ def update_match_pulse(dt: float = 1.0) -> None:
 # Main Menu
 # ---------------------------------------------------------------------------
 MENU_ITEMS = ["PLAY", "OPTIONS", "QUIT"]
-
+_menu_rects: list[pygame.Rect] = []
 
 def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     """
@@ -448,6 +448,8 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     - #F30261 used ONLY for accent (cursor >, separator lines, highlight box)
     - No subtitle
     """
+    global _menu_rects
+    _menu_rects.clear()
     c = get_canvas()
     draw_creepy_void(c, frame)
     blit_canvas_to_screen(screen)  # chunky void background first
@@ -511,6 +513,7 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
             pygame.draw.rect(screen, C_ACCENT, box, 2)
 
         screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
+        _menu_rects.append(item_s.get_rect(centerx=cx, centery=iy).inflate(40, 20))
 
         if is_sel:
             arr = _font_lg.render(">", False, C_ACCENT)
@@ -847,13 +850,15 @@ def draw_esc_hint(screen: pygame.Surface) -> None:
 # Pause overlay  —  drawn ON TOP of the frozen game frame
 # ---------------------------------------------------------------------------
 PAUSE_ITEMS = ["RESUME", "RESTART", "OPTIONS"]
-
+_pause_rects: list[pygame.Rect] = []
 
 def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> None:
     """
     Semi-transparent dark veil over the frozen game, with a centered
     pause menu in the same gothic style as the main menu.
     """
+    global _pause_rects
+    _pause_rects.clear()
     w = screen.get_width()
     h = screen.get_height()
     cx = w // 2
@@ -897,6 +902,7 @@ def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> Non
             pygame.draw.rect(screen, C_ACCENT, box, 2)
 
         screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
+        _pause_rects.append(item_s.get_rect(centerx=cx, centery=iy).inflate(40, 20))
 
         if is_sel:
             arr = _font_lg.render(">", False, C_ACCENT)
@@ -920,6 +926,7 @@ _OPT_LABELS = [
     "SFX VOLUME",
     "",              # APPLY & BACK button row
 ]
+_options_rects: list[pygame.Rect] = []
 
 
 def _draw_volume_bar(
@@ -962,6 +969,11 @@ def draw_options_menu(
     Full-screen options menu.  ``settings`` is the settings module.
     ``origin`` is 'menu' or 'pause' — changes the back-button label.
     """
+    global _options_rects
+    if selected_row == 0:  # Only clear when starting to draw the first row, wait no, this runs per frame
+        pass # Actually we should clear before the loop.
+    _options_rects.clear()
+
     c = get_canvas()
     draw_creepy_void(c, frame)
     blit_canvas_to_screen(screen)
@@ -1016,6 +1028,7 @@ def draw_options_menu(
                 screen.blit(arr, (cx - btn_w // 2 - 44, btn_y - arr.get_height() // 2))
 
             screen.blit(btn_surf, btn_surf.get_rect(centerx=cx, centery=btn_y))
+            _options_rects.append(btn_surf.get_rect(centerx=cx, centery=btn_y).inflate(64, 16))
             continue
 
         # Label
@@ -1028,6 +1041,9 @@ def draw_options_menu(
             pygame.draw.line(screen, C_ACCENT,
                              (label_x, hl_y),
                              (label_x + lbl_surf.get_width(), hl_y), 1)
+                             
+        row_rect = pygame.Rect(cx - 300, ry - 15, 600, 30)
+        _options_rects.append(row_rect)
 
         # Value display
         if row == 0:  # Display Mode
@@ -1059,3 +1075,28 @@ def draw_options_menu(
     hint2 = _font_sm.render("ENTER - apply & back  |  ESC - back", False, C_DIM)
     screen.blit(hint1, hint1.get_rect(centerx=cx, centery=h - 56))
     screen.blit(hint2, hint2.get_rect(centerx=cx, centery=h - 28))
+
+# ---------------------------------------------------------------------------
+# Mouse Hover Helpers
+# ---------------------------------------------------------------------------
+
+def get_hovered_menu_item(mx: int, my: int) -> int | None:
+    for i, r in enumerate(_menu_rects):
+        if r.collidepoint(mx, my): return i
+    return None
+
+def get_hovered_pause_item(mx: int, my: int) -> int | None:
+    for i, r in enumerate(_pause_rects):
+        if r.collidepoint(mx, my): return i
+    return None
+
+def get_hovered_options_item(mx: int, my: int) -> int | None:
+    for i, r in enumerate(_options_rects):
+        if r.collidepoint(mx, my): return i
+    return None
+
+def get_options_rect(row: int) -> pygame.Rect | None:
+    if 0 <= row < len(_options_rects):
+        return _options_rects[row]
+    return None
+
