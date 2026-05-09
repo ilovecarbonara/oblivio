@@ -96,8 +96,16 @@ def load() -> None:
     global display_mode, resolution, master_volume, music_volume, sfx_volume
 
     if not os.path.exists(_SETTINGS_PATH):
-        print("[SETTINGS] No settings.json found — using defaults.")
-        return
+        print("[SETTINGS] No settings.json found — creating from defaults.")
+        default_path = os.path.join(_HERE, "settings.default.json")
+        if os.path.exists(default_path):
+            with open(default_path, "r", encoding="utf-8") as f:
+                default_data = f.read()
+            with open(_SETTINGS_PATH, "w", encoding="utf-8") as f:
+                f.write(default_data)
+        else:
+            print("[SETTINGS] settings.default.json is missing too! Using hardcoded defaults.")
+            return
 
     try:
         with open(_SETTINGS_PATH, "r", encoding="utf-8") as f:
