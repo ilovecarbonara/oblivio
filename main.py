@@ -97,16 +97,19 @@ def _options_adjust(row: int, direction: int) -> None:
         cfg.master_volume = round(max(0.0, min(1.0, cfg.master_volume + direction * 0.1)), 2)
         cfg.save()
         cfg.apply_audio()
+        audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
 
     elif row == 3:  # Music Volume
         cfg.music_volume = round(max(0.0, min(1.0, cfg.music_volume + direction * 0.1)), 2)
         cfg.save()
         cfg.apply_audio()
+        audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
 
     elif row == 4:  # SFX Volume
         cfg.sfx_volume = round(max(0.0, min(1.0, cfg.sfx_volume + direction * 0.1)), 2)
         cfg.save()
-        # SFX playback not implemented yet — volume stored for future use
+        cfg.apply_audio()
+        audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +205,7 @@ def main() -> None:
                             elif options_selected == 4: cfg.sfx_volume = pct
                             cfg.save()
                             cfg.apply_audio()
+                            audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
                             
                 elif game.state == GameState.GRID_SELECT:
                     for i, r in enumerate(_grid_rects):
@@ -472,6 +476,7 @@ def main() -> None:
                                     elif idx == 4: cfg.sfx_volume = pct
                                     cfg.save()
                                     cfg.apply_audio()
+                                    audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
                                 else:
                                     if mx < value_x + slider_w / 2:
                                         _options_adjust(idx, -1)

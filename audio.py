@@ -36,6 +36,8 @@ _SFX_FILES = {
 # ---------------------------------------------------------------------------
 _sounds:    dict[str, pygame.mixer.Sound] = {}
 _bgm_state: str | None = None   # "menu" | "game" | "paused" | None
+_menu_bgm_snd: pygame.mixer.Sound | None = None
+_menu_bgm_channel: pygame.mixer.Channel | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -44,11 +46,20 @@ _bgm_state: str | None = None   # "menu" | "game" | "paused" | None
 
 def init(master_vol: float = 1.0, music_vol: float = 1.0, sfx_vol: float = 1.0) -> None:
     """Load all SFX. Call once after pygame.mixer.init()."""
+    global _menu_bgm_snd, _menu_bgm_channel
     for key, path in _SFX_FILES.items():
         if os.path.exists(path):
             _sounds[key] = pygame.mixer.Sound(path)
         else:
             print(f"[AUDIO] Missing SFX: {path}")
+            
+    if os.path.exists(_BGM_MENU):
+        try:
+            _menu_bgm_snd = pygame.mixer.Sound(_BGM_MENU)
+            _menu_bgm_channel = pygame.mixer.Channel(7)
+        except Exception as e:
+            print(f"[AUDIO] Failed to load menu BGM as Sound: {e}")
+            
     apply_volumes(master_vol, music_vol, sfx_vol)
 
 
@@ -59,6 +70,8 @@ def apply_volumes(master_vol: float, music_vol: float, sfx_vol: float) -> None:
     for snd in _sounds.values():
         snd.set_volume(eff_sfx)
     pygame.mixer.music.set_volume(eff_music)
+    if _menu_bgm_snd:
+        _menu_bgm_snd.set_volume(eff_music)
 
 
 # ---------------------------------------------------------------------------
@@ -88,9 +101,10 @@ def bgm_play_menu() -> None:
     if _bgm_state == "menu":
         return
     _bgm_state = "menu"
-    if os.path.exists(_BGM_MENU):
-        pygame.mixer.music.load(_BGM_MENU)
-        pygame.mixer.music.play(-1)
+    pygame.mixer.music.stop()
+    if _menu_bgm_snd and _menu_bgm_channel:
+        if not _menu_bgm_channel.get_busy():
+            _menu_bgm_channel.play(_menu_bgm_snd, loops=-1)
 
 
 def bgm_play_game(difficulty_label: str = "") -> None:
@@ -100,6 +114,9 @@ def bgm_play_game(difficulty_label: str = "") -> None:
     """
     global _bgm_state
     _bgm_state = "game"
+    if _menu_bgm_channel:
+        _menu_bgm_channel.stop()
+        
     if difficulty_label.lower() == "easy" and os.path.exists(_BGM_GAME):
         pygame.mixer.music.load(_BGM_GAME)
         pygame.mixer.music.play(-1)
@@ -113,12 +130,16 @@ def bgm_pause() -> None:
     if _bgm_state == "game":
         pygame.mixer.music.pause()
         _bgm_state = "paused"
+        if _menu_bgm_snd and _menu_bgm_channel:
+            _menu_bgm_channel.play(_menu_bgm_snd, loops=-1)
 
 
 def bgm_resume() -> None:
     """Resume the in-game track from where it was paused."""
     global _bgm_state
     if _bgm_state == "paused":
+        if _menu_bgm_channel:
+            _menu_bgm_channel.stop()
         pygame.mixer.music.unpause()
         _bgm_state = "game"
 
@@ -127,4 +148,6 @@ def bgm_stop() -> None:
     """Stop all BGM completely (Game Over / Win)."""
     global _bgm_state
     pygame.mixer.music.stop()
+    if _menu_bgm_channel:
+        _menu_bgm_channel.stop()
     _bgm_state = None
