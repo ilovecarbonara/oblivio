@@ -169,7 +169,6 @@ def main() -> None:
     _prev_options_sel: int = options_selected
 
     _grid_rects: list[pygame.Rect] = []
-    _result_rects: list[pygame.Rect] = []
 
     running = True
     dt_ms   = 0.0          # milliseconds since last frame
@@ -211,8 +210,8 @@ def main() -> None:
                     for i, r in enumerate(_grid_rects):
                         if r.collidepoint(mx, my): grid_selected = i
                 elif game.state in (GameState.GAME_OVER, GameState.WIN):
-                    for i, r in enumerate(_result_rects):
-                        if r.collidepoint(mx, my): result_selected = i
+                    idx = ui.get_hovered_result_item(mx, my)
+                    if idx is not None: result_selected = idx
 
             elif event.type == pygame.KEYDOWN:
 
@@ -449,7 +448,7 @@ def main() -> None:
                         valid_click = True
                     elif game.state == GameState.GRID_SELECT and any(r.collidepoint(mx, my) for r in _grid_rects):
                         valid_click = True
-                    elif game.state in (GameState.GAME_OVER, GameState.WIN) and any(r.collidepoint(mx, my) for r in _result_rects):
+                    elif game.state in (GameState.GAME_OVER, GameState.WIN) and ui.get_hovered_result_item(mx, my) is not None:
                         valid_click = True
                         
                     if valid_click:
@@ -597,33 +596,7 @@ def main() -> None:
                 screen.blit(ds, ds.get_rect(centerx=win_w // 2, centery=dy))
 
         elif game.state in (GameState.GAME_OVER, GameState.WIN):
-            # Week 3 Jim screens replace this placeholder
-            screen.fill((10, 6, 24))
-            try:
-                from pygame.font import Font as _F
-                _fp = os.path.join("assets", "PressStart2P.ttf")
-                big  = _F(_fp, 20) if os.path.exists(_fp) else pygame.font.SysFont("couriernew", 28, bold=True)
-                sml  = _F(_fp, 10) if os.path.exists(_fp) else pygame.font.SysFont("couriernew", 14)
-            except Exception:
-                big  = pygame.font.SysFont("couriernew", 28, bold=True)
-                sml  = pygame.font.SysFont("couriernew", 14)
-
-            label = "GAME OVER" if game.state == GameState.GAME_OVER else "YOU WIN!"
-            color = (200, 40, 40) if game.state == GameState.GAME_OVER else (232, 24, 90)
-            ts    = big.render(label, False, color)
-            screen.blit(ts, ts.get_rect(centerx=win_w // 2, centery=win_h // 2 - 40))
-            sc = sml.render(f"SCORE: {game.score.total}", False, (200, 200, 200))
-            screen.blit(sc, sc.get_rect(centerx=win_w // 2, centery=win_h // 2))
-
-            opts = ["PLAY AGAIN", "MAIN MENU"]
-            _result_rects.clear()
-            for i, o in enumerate(opts):
-                color = (243, 2, 97) if i == result_selected else (90, 70, 100)
-                text = f"> {o} <" if i == result_selected else o
-                os_surf = sml.render(text, False, color)
-                rect = os_surf.get_rect(centerx=win_w // 2, centery=win_h // 2 + 60 + i * 30)
-                screen.blit(os_surf, rect)
-                _result_rects.append(rect.inflate(40, 20))
+            ui.draw_result_screen(screen, game.state == GameState.WIN, game.score.total, result_selected, frame)
 
         # Transition overlay (drawn last, on top of everything)
         ui.draw_transition(screen)
