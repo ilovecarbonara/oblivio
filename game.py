@@ -22,7 +22,8 @@ from score import Score
 # ---------------------------------------------------------------------------
 
 MISMATCH_DELAY_MS = 1000.0  # ms to show mismatched cards before flipping back
-WIN_DELAY_MS      = 600.0   # ms to wait after last match before showing WIN screen
+WIN_DELAY_MS      = 1000.0  # ms to wait after last match before showing WIN screen
+GAME_OVER_DELAY_MS= 1000.0  # ms to wait after last mismatch flip back before showing GAME OVER screen
 
 
 
@@ -107,6 +108,8 @@ class Game:
         self.matched_pairs   : int          = 0      # number of pairs found so far
         self._win_pending    : bool         = False  # True when last match found, waiting for anim
         self._win_delay      : float        = 0.0    # countdown (ms) before WIN transition
+        self._game_over_pending: bool       = False  # True when HP is 0, waiting for flip back anim
+        self._game_over_delay: float        = 0.0    # countdown (ms) before GAME_OVER transition
 
         # --- HP & scoring (Week 3) ---
         self.hp              : HPBar        = HPBar()
@@ -138,6 +141,8 @@ class Game:
         self.matched_pairs   = 0
         self._win_pending    = False
         self._win_delay      = 0.0
+        self._game_over_pending = False
+        self._game_over_delay   = 0.0
         self.hp              = HPBar()
         self.score           = Score()
         self._turn_start_ticks = 0
@@ -164,6 +169,8 @@ class Game:
         self.matched_pairs  = 0
         self._win_pending   = False
         self._win_delay     = 0.0
+        self._game_over_pending = False
+        self._game_over_delay   = 0.0
         self.hp             = HPBar()
         self.score          = Score()
         self._turn_start_ticks = 0
@@ -209,7 +216,7 @@ class Game:
         -------
         Card | None
         """
-        if self.state != GameState.PLAYING or self.lock_input:
+        if self.state != GameState.PLAYING or self.lock_input or self._game_over_pending or self._win_pending:
             return None
 
         for card in self.cards:
@@ -247,7 +254,7 @@ class Game:
             ``"mismatch"`` — second card flipped, no match; timer started.
             ``None``       — flip rejected (wrong state, locked, etc.).
         """
-        if self.state != GameState.PLAYING or self.lock_input:
+        if self.state != GameState.PLAYING or self.lock_input or self._game_over_pending or self._win_pending:
             return None
         if card.state != CardState.FACE_DOWN:
             return None
@@ -328,6 +335,15 @@ class Game:
                 self.win()
             return None
 
+        # --- Pending game over delay ---
+        if self._game_over_pending:
+            self._game_over_delay -= dt_ms
+            if self._game_over_delay <= 0:
+                self._game_over_pending = False
+                print(f"[GAME OVER] HP depleted — final score: {self.score.total}")
+                self.game_over()
+            return None
+
         if not self.lock_input:
             return None
 
@@ -344,8 +360,9 @@ class Game:
 
         # --- Game-over check (Week 3) ---
         if self.hp.is_depleted:
-            print(f"[GAME OVER] HP depleted — final score: {self.score.total}")
-            self.game_over()
+            print("[GAME OVER] HP depleted — waiting for flip back animation...")
+            self._game_over_pending = True
+            self._game_over_delay   = GAME_OVER_DELAY_MS
 
         return mismatched
 
