@@ -30,7 +30,7 @@ _SFX_FILES = {
     "select":   os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Select - 2.wav"),
     "cancel":   os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Cancel - 1.wav"),
     "popup":    os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Popup Open - 1.wav"),
-    "flip":     os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Swipe - 1.wav"),
+    "flip":     os.path.join(_SFX_INGAME, "card_draw_1.wav"),
     "cursor":   os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Cursor - 1.wav"),
     "mismatch": os.path.join(_SFX_INGAME, "JDSherbert - Ultimate UI SFX Pack - Cancel - 2.wav"),
 }

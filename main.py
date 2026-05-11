@@ -580,7 +580,7 @@ def main() -> None:
             if hovered is not None:
                 cursor_pos = hovered.grid_pos
 
-            ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, cursor_pos)
+            ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, game.score.decay_fraction, cursor_pos)
             ui.draw_esc_hint(screen)
 
         elif game.state == GameState.PAUSED:
@@ -588,7 +588,7 @@ def main() -> None:
             ui.draw_game_bg(screen, frame // 4)
             ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
             ui.set_hovered(None)
-            ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, cursor_pos)
+            ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, game.score.decay_fraction, cursor_pos)
             # Pause overlay on top
             ui.draw_pause_overlay(screen, pause_selected, frame)
 

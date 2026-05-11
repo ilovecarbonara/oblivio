@@ -431,9 +431,13 @@ def start_preview(cards: list) -> None:
     """
     global _preview_active, _preview_phase, _preview_timer
     from card import CardState
+    import audio
+    
     _preview_active = True
     _preview_phase  = "flip_in"
     _preview_timer  = _PREVIEW_FLIP_MS
+    
+    audio.sfx_flip()
 
     # Change state then animate the reveal flip
     for card in cards:
@@ -769,14 +773,15 @@ def draw_card_grid(
     card_w: int,
     card_h: int,
     multiplier: float = 1.0,
+    decay_fraction: float = 1.0,
     cursor_pos: tuple[int, int] | None = None,
 ) -> None:
     set_cursor(cursor_pos)
     for card in cards:
         draw_card(screen, card, card_w, card_h)
 
-    # Draw persistent multiplier badge — animated, pulsing, color-shifted
-    if multiplier > 1.0 and cards:
+    # Draw persistent multiplier badge — animated, pulsing, color-shifted, and decaying
+    if multiplier > 1.0 and cards and decay_fraction > 0:
         import time
         now_ms  = pygame.time.get_ticks()
 
@@ -793,7 +798,9 @@ def draw_card_grid(
                        max(0, min(255, g_c)),
                        max(0, min(255, b_c)))
 
-        base_size  = 38 + int(multiplier * 3)
+        # Shrink as it decays, with a minimum size floor
+        effective_scale = max(0.4, decay_fraction)
+        base_size  = (38 + int(multiplier * 3)) * effective_scale
         font       = get_gothic_font(int(base_size * wobble))
 
         max_x = max(c.rect.right  for c in cards)
@@ -801,6 +808,17 @@ def draw_card_grid(
 
         text_surf   = font.render(f"×{multiplier:.1f}", False, badge_color)
         shadow_surf = font.render(f"×{multiplier:.1f}", False, C_ACCENT_DK)
+
+        # Fade out alpha based on decay_fraction
+        alpha = int(255 * min(1.0, decay_fraction * 1.5))  # Fade starts later
+        
+        # Flash urgency when under 20%
+        if decay_fraction < 0.2:
+            flash_alpha = int(120 + 135 * math.sin(now_ms * 0.03))
+            alpha = min(alpha, flash_alpha)
+
+        text_surf.set_alpha(alpha)
+        shadow_surf.set_alpha(alpha)
 
         # Tilt slightly right for energy
         text_surf   = pygame.transform.rotate(text_surf,   -12)
@@ -814,6 +832,7 @@ def draw_card_grid(
         screen.blit(shadow_surf, (tx + 5, ty + 5))
         # Main text
         screen.blit(text_surf, (tx, ty))
+
 
 
 # ---------------------------------------------------------------------------
