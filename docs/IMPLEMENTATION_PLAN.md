@@ -112,10 +112,10 @@
 
 ### End-of-Week Merge Checklist
 
-- [ ] Both branches merged to `main`
-- [ ] Complete game flow: Main Menu → Grid Select → Gameplay → Win/Game Over → Main Menu
-- [ ] HP decreases on mismatch, score increases on match, both display in real time
-- [ ] Game over triggers at 0 HP; win triggers when all pairs matched
+- [x] Both branches merged to `main`
+- [x] Complete game flow: Main Menu → Grid Select → Gameplay → Win/Game Over → Main Menu
+- [x] HP decreases on mismatch, score increases on match, both display in real time
+- [x] Game over triggers at 0 HP; win triggers when all pairs matched
 
 ---
 
@@ -125,12 +125,12 @@
 
 ### Jay (Game Logic)
 
-- [ ] **[Moved to Jim W2]** ~~Source audio assets: BGM and SFX~~
-- [ ] Set up `assets/audio/` with sourced files (`.ogg` or `.wav` for SFX, `.ogg` or `.mp3` for BGM)
-- [ ] Implement audio playback — load and play BGM on loop during gameplay, trigger SFX on events (flip, match, mismatch, game over, win)
-- [ ] Play-test all three difficulty levels end-to-end; note and fix bugs
-- [ ] Ensure input is blocked during animations (prevent click-through during flip animation)
-- [ ] Final code cleanup — remove debug prints, add comments to all modules
+- [x] **[Moved to Jim W2]** ~~Source audio assets: BGM and SFX~~
+- [x] Set up `assets/audio/` with sourced files (`.ogg` or `.wav` for SFX, `.ogg` or `.mp3` for BGM)
+- [x] Implement audio playback — load and play BGM on loop during gameplay, trigger SFX on events (flip, match, mismatch, game over, win)
+- [x] Play-test all three difficulty levels end-to-end; note and fix bugs
+- [x] Ensure input is blocked during animations (prevent click-through during flip animation)
+- [x] Final code cleanup — remove debug prints, add comments to all modules
 
 **Branch:** `week-4/Jay/audio-and-bugfixes`
 
