@@ -167,6 +167,7 @@ def main() -> None:
     _prev_grid_sel:    int = grid_selected
     _prev_pause_sel:   int = pause_selected
     _prev_options_sel: int = options_selected
+    _prev_hovered_card       = None   # tracks mouse-hover card changes in PLAYING
 
     _grid_rects: list[pygame.Rect] = []
 
@@ -262,7 +263,10 @@ def main() -> None:
                         grid_selected = (grid_selected - 1) % 4
                     elif game.state == GameState.PLAYING and cursor_pos is not None:
                         cx, cy = cursor_pos
-                        cursor_pos = (cx, max(0, cy - 1))
+                        new_pos = (cx, max(0, cy - 1))
+                        if new_pos != cursor_pos:
+                            audio.sfx_cursor()
+                        cursor_pos = new_pos
                     elif game.state in (GameState.GAME_OVER, GameState.WIN):
                         result_selected = (result_selected - 1) % 2
                     elif game.state == GameState.PAUSED:
@@ -280,7 +284,10 @@ def main() -> None:
                         grid_selected = (grid_selected + 1) % 4
                     elif game.state == GameState.PLAYING and cursor_pos is not None:
                         cx, cy = cursor_pos
-                        cursor_pos = (cx, min(game.difficulty.rows - 1, cy + 1))
+                        new_pos = (cx, min(game.difficulty.rows - 1, cy + 1))
+                        if new_pos != cursor_pos:
+                            audio.sfx_cursor()
+                        cursor_pos = new_pos
                     elif game.state in (GameState.GAME_OVER, GameState.WIN):
                         result_selected = (result_selected + 1) % 2
                     elif game.state == GameState.PAUSED:
@@ -294,7 +301,10 @@ def main() -> None:
                 elif event.key in (pygame.K_LEFT, pygame.K_a):
                     if game.state == GameState.PLAYING and cursor_pos is not None:
                         cx, cy = cursor_pos
-                        cursor_pos = (max(0, cx - 1), cy)
+                        new_pos = (max(0, cx - 1), cy)
+                        if new_pos != cursor_pos:
+                            audio.sfx_cursor()
+                        cursor_pos = new_pos
                     elif game.state == GameState.OPTIONS:
                         _options_adjust(options_selected, -1)
 
@@ -304,7 +314,10 @@ def main() -> None:
                 elif event.key in (pygame.K_RIGHT, pygame.K_d):
                     if game.state == GameState.PLAYING and cursor_pos is not None:
                         cx, cy = cursor_pos
-                        cursor_pos = (min(game.difficulty.cols - 1, cx + 1), cy)
+                        new_pos = (min(game.difficulty.cols - 1, cx + 1), cy)
+                        if new_pos != cursor_pos:
+                            audio.sfx_cursor()
+                        cursor_pos = new_pos
                     elif game.state == GameState.OPTIONS:
                         _options_adjust(options_selected, +1)
 
@@ -556,6 +569,12 @@ def main() -> None:
                             hovered = c
                         break
             ui.set_hovered(hovered)
+
+            # Fire cursor SFX once per new card the mouse enters
+            if hovered is not _prev_hovered_card:
+                if hovered is not None and not ui.is_preview_active():
+                    audio.sfx_cursor()
+                _prev_hovered_card = hovered
 
             # If the mouse moved, sync cursor_pos to the card under the pointer
             if hovered is not None:

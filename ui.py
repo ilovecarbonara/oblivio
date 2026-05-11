@@ -775,29 +775,46 @@ def draw_card_grid(
     for card in cards:
         draw_card(screen, card, card_w, card_h)
 
-    # Draw persistent multiplier badge on the top right corner of the grid
+    # Draw persistent multiplier badge — animated, pulsing, color-shifted
     if multiplier > 1.0 and cards:
-        max_x = max(c.rect.right for c in cards)
-        min_y = min(c.rect.top for c in cards)
-        
-        font = get_gothic_font(42)  # slightly larger and juicy
-        
-        # Text and shadow
-        text_surf = font.render(f"{multiplier:.1f}x", False, C_ACCENT)
-        shadow_surf = font.render(f"{multiplier:.1f}x", False, C_ACCENT_DK)
-        
-        # Tilt to the right
-        text_surf = pygame.transform.rotate(text_surf, -15)
-        shadow_surf = pygame.transform.rotate(shadow_surf, -15)
-        
-        # Position offset: place the bottom-left of the text near the top-right of the grid
-        tw = text_surf.get_width()
-        th = text_surf.get_height()
-        tx = max_x - tw // 2 + 10
-        ty = min_y - th // 2 - 10
-        
-        screen.blit(shadow_surf, (tx + 4, ty + 4))
+        import time
+        now_ms  = pygame.time.get_ticks()
+
+        # Bounce: gentle sine scale wobble (faster at higher multipliers)
+        wobble_speed = 0.003 + (multiplier - 1.0) * 0.001
+        wobble       = 1.0 + 0.06 * math.sin(now_ms * wobble_speed)
+
+        # Color: magenta (×1) → orange (×2) → bright yellow (×4+)
+        t_col = min(1.0, (multiplier - 1.0) / 3.0)
+        r_c = int(243 + (255 - 243) * t_col)
+        g_c = int(  2 + (200 -   2) * t_col)
+        b_c = int( 97 + (  0 -  97) * t_col)
+        badge_color = (max(0, min(255, r_c)),
+                       max(0, min(255, g_c)),
+                       max(0, min(255, b_c)))
+
+        base_size  = 38 + int(multiplier * 3)
+        font       = get_gothic_font(int(base_size * wobble))
+
+        max_x = max(c.rect.right  for c in cards)
+        min_y = min(c.rect.top    for c in cards)
+
+        text_surf   = font.render(f"×{multiplier:.1f}", False, badge_color)
+        shadow_surf = font.render(f"×{multiplier:.1f}", False, C_ACCENT_DK)
+
+        # Tilt slightly right for energy
+        text_surf   = pygame.transform.rotate(text_surf,   -12)
+        shadow_surf = pygame.transform.rotate(shadow_surf, -12)
+
+        tw, th = text_surf.get_size()
+        tx = max_x - tw // 2 + 14
+        ty = min_y - th // 2 - 14
+
+        # Drop shadow
+        screen.blit(shadow_surf, (tx + 5, ty + 5))
+        # Main text
         screen.blit(text_surf, (tx, ty))
+
 
 # ---------------------------------------------------------------------------
 # Floating Text & Score Juice
