@@ -364,65 +364,53 @@ def draw_transition(screen: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 # Danger vignette  —  smooth gradient pulsing when HP ≤ 50
 # ---------------------------------------------------------------------------
-_vignette_surf: pygame.Surface | None = None
-_vignette_size: tuple[int, int] = (0, 0)
-
-
-def _build_vignette(w: int, h: int) -> pygame.Surface:
-    """
-    Bake a vignette Surface once per resolution.
-    Uses 40 concentric rects with accumulating alpha so the
-    edges are fully opaque and the centre is transparent.
-    """
-    surf = pygame.Surface((w, h), pygame.SRCALPHA)
-    surf.fill((0, 0, 0, 0))
-    steps  = 40
-    depth_x = w // 3
-    depth_y = h // 3
-    for i in range(steps):
-        t   = 1.0 - i / steps          # 1.0 = outermost, 0.0 = innermost
-        a   = int(11 * t * t)           # quadratic: outer layers add more alpha
-        ix  = int(depth_x * i / steps)
-        iy  = int(depth_y * i / steps)
-        pygame.draw.rect(surf, (180, 0, 0, a),
-                         pygame.Rect(ix, iy, w - ix * 2, h - iy * 2))
-    return surf
-
 
 def draw_danger_vignette(screen: pygame.Surface, hp: float, frame: int) -> None:
     """
     Draw a pulsing gradient vignette on screen edges when HP is low.
-    - 30 < hp ≤ 50: slow pulse, moderate opacity
-    - hp ≤ 30:      fast pulse, high opacity
+    - 30 < hp ≤ 50: slow pulse, moderate intensity
+    - hp ≤ 30:      fast, intense pulse matching the fast heartbeat
+
+    Uses 22 concentric gradient bands drawn outer→inner so the center
+    is progressively overwritten with lower alpha, creating a smooth
+    edge-glow that fades to transparent at the screen centre.
     """
     if hp > 50:
         return
 
-    global _vignette_surf, _vignette_size
     w, h = screen.get_size()
 
-    # Rebuild if resolution changed
-    if _vignette_surf is None or _vignette_size != (w, h):
-        _vignette_surf = _build_vignette(w, h)
-        _vignette_size = (w, h)
-
-    # Pulse parameters
     if hp <= 30:
-        speed     = 0.17    # fast — matches heartbeat_fast
-        max_alpha = 210
+        speed     = 0.17
+        max_alpha = 200
     else:
-        speed     = 0.07    # slow
+        speed     = 0.07
         max_alpha = 120
 
     t     = (frame * speed) % (2 * math.pi)
     pulse = (math.sin(t) + 1) / 2          # 0.0 → 1.0
-    alpha = int(max_alpha * pulse)
+    base_alpha = int(max_alpha * pulse)
 
-    if alpha <= 0:
+    if base_alpha <= 0:
         return
 
-    _vignette_surf.set_alpha(alpha)
-    screen.blit(_vignette_surf, (0, 0))
+    vsurf   = pygame.Surface((w, h), pygame.SRCALPHA)
+    bands   = 22
+    depth_x = w // 4    # how far the glow extends inward horizontally
+    depth_y = h // 4    # how far the glow extends inward vertically
+
+    # Outer → inner: outermost rect drawn first (high alpha).
+    # Each subsequent smaller rect overwrites the centre with lower alpha
+    # so the gradient naturally fades toward the middle.
+    for i in range(1, bands + 1):
+        t_b = 1.0 - i / bands                   # 1.0 (outermost) → ~0 (innermost)
+        a   = int(base_alpha * t_b ** 1.8)       # power curve: dark at edge, clears fast
+        ix  = int(depth_x * i / bands)
+        iy  = int(depth_y * i / bands)
+        pygame.draw.rect(vsurf, (190, 0, 0, a),
+                         pygame.Rect(ix, iy, w - ix * 2, h - iy * 2))
+
+    screen.blit(vsurf, (0, 0))
 
 
 # ---------------------------------------------------------------------------
