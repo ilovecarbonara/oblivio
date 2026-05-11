@@ -362,6 +362,97 @@ def draw_transition(screen: pygame.Surface) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Danger vignette  —  pulsing crimson edges when HP ≤ 50
+# ---------------------------------------------------------------------------
+
+def draw_danger_vignette(screen: pygame.Surface, hp: float, frame: int) -> None:
+    """
+    Draw a pulsing red vignette on screen edges when HP is low.
+    - 30 < hp ≤ 50: slow pulse, moderate intensity
+    - hp ≤ 30:      fast pulse, high intensity
+    """
+    if hp > 50:
+        return
+
+    w, h = screen.get_size()
+
+    # Pulse speed and intensity scale with how low HP is
+    if hp <= 30:
+        pulse_speed = 0.18    # fast heartbeat rhythm
+        max_alpha   = 140
+    else:
+        pulse_speed = 0.07    # slow pulse
+        max_alpha   = 80
+
+    # Sine wave: 0.0 → 1.0
+    t      = (frame * pulse_speed) % (2 * math.pi)
+    pulse  = (math.sin(t) + 1) / 2
+    alpha  = int(max_alpha * pulse)
+
+    if alpha <= 0:
+        return
+
+    # Draw 4 gradient-like edge rectangles (top, bottom, left, right)
+    edge = max(12, h // 6)
+    vign_color = (160, 0, 0, alpha)
+
+    vsurf = pygame.Surface((w, h), pygame.SRCALPHA)
+    # Top band
+    pygame.draw.rect(vsurf, vign_color, (0, 0, w, edge))
+    # Bottom band
+    pygame.draw.rect(vsurf, vign_color, (0, h - edge, w, edge))
+    # Left band
+    pygame.draw.rect(vsurf, vign_color, (0, 0, edge, h))
+    # Right band
+    pygame.draw.rect(vsurf, vign_color, (w - edge, 0, edge, h))
+    screen.blit(vsurf, (0, 0))
+
+
+# ---------------------------------------------------------------------------
+# Card preview  —  flip all cards face-up at game start, then flip back
+# ---------------------------------------------------------------------------
+_preview_active:  bool  = False
+_preview_timer:   float = 0.0    # ms remaining in hold phase
+_PREVIEW_HOLD_MS: float = 1200.0 # how long cards are shown face-up
+
+
+def start_preview(cards: list) -> None:
+    """
+    Force all cards face-up for ~1.2s then flip them all back simultaneously.
+    Call immediately after game.start_game() inside the transition callback.
+    Input must be blocked while is_preview_active() returns True.
+    """
+    global _preview_active, _preview_timer
+    from card import CardState
+    _preview_active = True
+    _preview_timer  = _PREVIEW_HOLD_MS
+    # Temporarily set all FACE_DOWN cards to FACE_UP for rendering
+    for card in cards:
+        if card.state == CardState.FACE_DOWN:
+            card.state = CardState.FACE_UP
+
+
+def update_preview(cards: list, dt_ms: float) -> None:
+    """Tick the preview timer. When expired, flip all cards back via animation."""
+    global _preview_active, _preview_timer
+    if not _preview_active:
+        return
+    _preview_timer -= dt_ms
+    if _preview_timer <= 0:
+        _preview_active = False
+        from card import CardState
+        # Flip all currently face-up (preview) cards back down with animation
+        for card in cards:
+            if card.state == CardState.FACE_UP:
+                card.state = CardState.FACE_DOWN
+                start_flip(card)
+
+
+def is_preview_active() -> bool:
+    return _preview_active
+
+
+# ---------------------------------------------------------------------------
 # Mismatch flash
 # ---------------------------------------------------------------------------
 _flash:  dict[int, float] = {}
@@ -751,31 +842,35 @@ def draw_hud(
     set_hp(hp)
     _tick_hp()
 
-    # ── Pixelated health bar ────────────────────────────────────────────────
-    if _PX_BAR_FRAMES:
-        fidx = _hp_to_frame_idx(_hp_drawn)
-        bar_surf = _PX_BAR_FRAMES[fidx]
+    # ── Custom drawn health bar ──────────────────────────────────────────────
+    bar_x         = 14
+    bar_display_w = 200
+    bar_display_h = 14
+    bar_top_y     = hud_h // 2 - bar_display_h // 2
 
-        # Scale up 4× (nearest-neighbour) so the pixel art stays chunky
-        bar_display_w = _BAR_W * 4
-        bar_display_h = _BAR_H * 4
-        bar_scaled = pygame.transform.scale(bar_surf, (bar_display_w, bar_display_h))
+    fill_w  = max(0, int(bar_display_w * (_hp_drawn / 100.0)))
+    hp_frac = _hp_drawn / 100.0
 
-        # Single bar, centered vertically in the HUD strip
-        bar_x     = 14
-        bar_top_y = hud_h // 2 - bar_display_h // 2
-        screen.blit(bar_scaled, (bar_x, bar_top_y))
-    else:
-        # Fallback drawn bar if sprite not loaded
-        bar_x = 14
-        bar_display_w = 168
-        bar_display_h = 12
-        bar_top_y = hud_h // 2 - bar_display_h
-        fill_w = max(0, int(bar_display_w * (_hp_drawn / 100.0)))
-        pygame.draw.rect(screen, (25, 10, 35), (bar_x, bar_top_y, bar_display_w, bar_display_h))
-        if fill_w > 0:
-            pygame.draw.rect(screen, C_ACCENT, (bar_x, bar_top_y, fill_w, bar_display_h))
-        pygame.draw.rect(screen, C_ACCENT_DK, (bar_x, bar_top_y, bar_display_w, bar_display_h), 1)
+    # Color: magenta (#F30261) at full → deep crimson (#8B0000) at critical
+    r = int(243 + (139 - 243) * (1.0 - hp_frac))
+    g = int(  2 + (  0 -   2) * (1.0 - hp_frac))
+    b = int( 97 + (  0 -  97) * (1.0 - hp_frac))
+    bar_color = (max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
+
+    # Track (empty portion)
+    pygame.draw.rect(screen, (18, 6, 28), (bar_x, bar_top_y, bar_display_w, bar_display_h), border_radius=3)
+    # Fill
+    if fill_w > 0:
+        pygame.draw.rect(screen, bar_color, (bar_x, bar_top_y, fill_w, bar_display_h), border_radius=3)
+    # Border
+    pygame.draw.rect(screen, C_ACCENT_DK, (bar_x, bar_top_y, bar_display_w, bar_display_h), 1, border_radius=3)
+
+    # HP text label above the bar
+    label_font = get_gothic_font(14)
+    hp_int     = max(0, int(round(_hp_drawn)))
+    hp_surf    = label_font.render(f"{hp_int}/100 HP", False, C_DIM)
+    screen.blit(hp_surf, (bar_x, bar_top_y - hp_surf.get_height() - 2))
+
 
     # ── Scoreboard (Gothic Housing + Juice) ─────────────────────────────────
     box_w = 240

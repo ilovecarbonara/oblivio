@@ -346,13 +346,14 @@ def main() -> None:
                                 _cards = grid.generate_grid(_diff, _cw, _ch, PADDING, _origin)
                                 game.start_game(_diff, _cards)
                                 cursor_pos = (0, 0)
+                                ui.start_preview(_cards)
                                 audio.bgm_play_game(_diff.label)
                                 print(f"[INFO] Game started — difficulty: {_diff.label} ({_diff.cols}×{_diff.rows})")
                             ui.start_transition(_start_game_cb)
 
                     # --- Playing (SPACE only — flip card) ---
                     elif game.state == GameState.PLAYING and event.key == pygame.K_SPACE:
-                        if cursor_pos is not None and not game.lock_input:
+                        if cursor_pos is not None and not game.lock_input and not ui.is_preview_active():
                             target = next(
                                 (c for c in game.cards if c.grid_pos == cursor_pos),
                                 None,
@@ -362,6 +363,7 @@ def main() -> None:
                                 if clicked and not ui.is_flipping(clicked):
                                     result = game.flip_card(clicked)
                                     if result is not None:
+                                        audio.sfx_flip()
                                         ui.start_flip(clicked)
 
                     # --- Paused ---
@@ -381,6 +383,7 @@ def main() -> None:
                                 game.start_game(_diff_r, _cards)
                                 ui.reset_hp()
                                 cursor_pos = (0, 0)
+                                ui.start_preview(_cards)
                                 audio.bgm_play_game(_diff_r.label)
                                 print(f"[INFO] Restarted — difficulty: {_diff_r.label} ({_diff_r.cols}×{_diff_r.rows})")
                             ui.start_transition(_restart_cb)
@@ -420,6 +423,7 @@ def main() -> None:
                                 _cards = grid.generate_grid(_diff_ga, _cw, _ch, PADDING, _origin)
                                 game.start_game(_diff_ga, _cards)
                                 cursor_pos = (0, 0)
+                                ui.start_preview(_cards)
                                 audio.bgm_play_game(_diff_ga.label)
                                 print(f"[INFO] Restarted — difficulty: {_diff_ga.label} ({_diff_ga.cols}×{_diff_ga.rows})")
                             ui.start_transition(_play_again_cb)
@@ -435,11 +439,13 @@ def main() -> None:
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mx, my = event.pos
                 if game.state == GameState.PLAYING:
-                    clicked = game.handle_click(event.pos)
-                    if clicked and not ui.is_flipping(clicked):
-                        result = game.flip_card(clicked)
-                        if result is not None:
-                            ui.start_flip(clicked)
+                    if not ui.is_preview_active():
+                        clicked = game.handle_click(event.pos)
+                        if clicked and not ui.is_flipping(clicked):
+                            result = game.flip_card(clicked)
+                            if result is not None:
+                                audio.sfx_flip()
+                                ui.start_flip(clicked)
                 else:
                     valid_click = False
                     if game.state == GameState.MENU and ui.get_hovered_menu_item(mx, my) is not None:
@@ -520,6 +526,11 @@ def main() -> None:
         ui.update_match_pulse()
         ui.update_screen_shake()
         ui.update_transition()
+        if game.state == GameState.PLAYING and game.cards:
+            ui.update_preview(game.cards, dt_ms)
+            audio.update_heartbeat(game.hp.current_hp, cfg.music_volume, cfg.master_volume)
+        elif game.state not in (GameState.PLAYING, GameState.PAUSED):
+            audio.heartbeat_stop()
         frame += 1
 
         # (BGM managed explicitly at each state transition above)
@@ -531,6 +542,7 @@ def main() -> None:
         elif game.state == GameState.PLAYING:
             ui.draw_game_bg(screen, frame // 4)   # slow spin behind cards
             ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
+            ui.draw_danger_vignette(screen, game.hp.current_hp, frame)
 
             # Hover detection — find which face-down card the mouse is over
             mx, my = pygame.mouse.get_pos()
