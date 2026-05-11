@@ -640,10 +640,11 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     item_spacing = 80
     for i, label in enumerate(MENU_ITEMS):
         is_sel = (i == selected)
-        color  = C_WHITE if is_sel else C_DIM
+        color  = C_ACCENT if is_sel else C_DIM
         iy     = item_y0 + i * item_spacing
 
-        item_s = _font_lg.render(label, False, color)
+        display_label = f"> {label} <" if is_sel else label
+        item_s = _font_lg.render(display_label, False, color)
         item_w = item_s.get_width()
         item_h = item_s.get_height()
 
@@ -656,9 +657,7 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
         screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
         _menu_rects.append(item_s.get_rect(centerx=cx, centery=iy).inflate(40, 20))
 
-        if is_sel:
-            arr = _font_lg.render(">", False, C_ACCENT)
-            screen.blit(arr, (cx - item_w // 2 - 44, iy - arr.get_height() // 2))
+
 
 
 
@@ -1054,10 +1053,11 @@ def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> Non
     item_spacing = 60
     for i, label in enumerate(PAUSE_ITEMS):
         is_sel = (i == selected)
-        color = C_WHITE if is_sel else C_DIM
-        iy = item_y0 + i * item_spacing
+        color  = C_ACCENT if is_sel else C_DIM
+        iy     = item_y0 + i * item_spacing
 
-        item_s = _font_lg.render(label, False, color)
+        display_label = f"> {label} <" if is_sel else label
+        item_s = _font_lg.render(display_label, False, color)
         item_w = item_s.get_width()
         item_h = item_s.get_height()
 
@@ -1070,9 +1070,7 @@ def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> Non
         screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
         _pause_rects.append(item_s.get_rect(centerx=cx, centery=iy).inflate(40, 20))
 
-        if is_sel:
-            arr = _font_lg.render(">", False, C_ACCENT)
-            screen.blit(arr, (cx - item_w // 2 - 44, iy - arr.get_height() // 2))
+
 
 
 
@@ -1173,11 +1171,13 @@ def draw_options_menu(
     for row in range(6):
         is_sel = (row == selected_row)
         ry = row_y0 + row * row_spacing
-        color = C_WHITE if is_sel else C_DIM
+        color = C_ACCENT if is_sel else C_DIM
 
         # Row 5 is the APPLY & BACK button
         if row == 5:
             btn_label = "APPLY & BACK"
+            if is_sel:
+                btn_label = f"> {btn_label} <"
             btn_surf = _font_lg.render(btn_label, False, color)
             btn_w = btn_surf.get_width()
             btn_h = btn_surf.get_height()
@@ -1188,8 +1188,7 @@ def draw_options_menu(
                                   btn_w + 64, btn_h + 16)
                 pygame.draw.rect(screen, (25, 2, 14), box)
                 pygame.draw.rect(screen, C_ACCENT, box, 2)
-                arr = _font_lg.render(">", False, C_ACCENT)
-                screen.blit(arr, (cx - btn_w // 2 - 44, btn_y - arr.get_height() // 2))
+
 
             screen.blit(btn_surf, btn_surf.get_rect(centerx=cx, centery=btn_y))
             _options_rects.append(btn_surf.get_rect(centerx=cx, centery=btn_y).inflate(64, 16))
@@ -1304,10 +1303,11 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
     item_spacing = 80
     for i, label_str in enumerate(RESULT_ITEMS):
         is_sel = (i == selected)
-        color_item = C_WHITE if is_sel else C_DIM
+        color_item = C_ACCENT if is_sel else C_DIM
         iy = item_y0 + i * item_spacing
 
-        item_s = _font_lg.render(label_str, False, color_item)
+        display_label = f"> {label_str} <" if is_sel else label_str
+        item_s = _font_lg.render(display_label, False, color_item)
         item_w = item_s.get_width()
         item_h = item_s.get_height()
 
@@ -1320,9 +1320,7 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
         screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
         _result_rects.append(item_s.get_rect(centerx=cx, centery=iy).inflate(40, 20))
 
-        if is_sel:
-            arr = _font_lg.render(">", False, C_ACCENT)
-            screen.blit(arr, (cx - item_w // 2 - 44, iy - arr.get_height() // 2))
+
 
 
 
