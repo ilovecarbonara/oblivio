@@ -58,6 +58,12 @@ _menu_bgm_channel: pygame.mixer.Channel | None = None
 def init(master_vol: float = 1.0, music_vol: float = 1.0, sfx_vol: float = 1.0) -> None:
     """Load all SFX. Call once after pygame.mixer.init()."""
     global _menu_bgm_snd, _menu_bgm_channel, _hb_slow, _hb_fast, _hb_channel
+
+    # Ensure enough channels and reserve dedicated ones so auto-play never
+    # assigns SFX sounds to channels used by heartbeat (1) or menu BGM (7).
+    pygame.mixer.set_num_channels(16)
+    pygame.mixer.set_reserved(2)   # protects channels 0 and 1
+
     for key, path in _SFX_FILES.items():
         if os.path.exists(path):
             _sounds[key] = pygame.mixer.Sound(path)

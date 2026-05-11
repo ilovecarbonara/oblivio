@@ -221,6 +221,7 @@ def main() -> None:
                 if event.key == pygame.K_ESCAPE:
                     if game.state == GameState.PLAYING:
                         audio.bgm_pause()
+                        audio.heartbeat_stop()
                         audio.sfx_popup()
                         game.to_pause()
                         pause_selected = 0
@@ -497,13 +498,15 @@ def main() -> None:
             for c in mismatched:
                 ui.start_flip(c)
 
-        # Detect transition to GAME_OVER or WIN — stop BGM
+        # Detect transition to GAME_OVER or WIN — stop BGM + heartbeat
         if game.state != _prev_state:
             if game.state in (GameState.GAME_OVER, GameState.WIN):
                 audio.bgm_stop()
+                audio.heartbeat_stop()
             elif game.state == GameState.MENU and _prev_state not in (
                     GameState.GRID_SELECT, GameState.OPTIONS):
                 audio.bgm_play_menu()
+                audio.heartbeat_stop()
             _prev_state = game.state
 
         # Hover SFX — fire once per new keyboard selection
@@ -529,8 +532,6 @@ def main() -> None:
         if game.state == GameState.PLAYING and game.cards:
             ui.update_preview(game.cards, dt_ms)
             audio.update_heartbeat(game.hp.current_hp, cfg.music_volume, cfg.master_volume)
-        elif game.state not in (GameState.PLAYING, GameState.PAUSED):
-            audio.heartbeat_stop()
         frame += 1
 
         # (BGM managed explicitly at each state transition above)

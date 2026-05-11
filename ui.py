@@ -362,90 +362,119 @@ def draw_transition(screen: pygame.Surface) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Danger vignette  —  pulsing crimson edges when HP ≤ 50
+# Danger vignette  —  smooth gradient pulsing when HP ≤ 50
 # ---------------------------------------------------------------------------
+_vignette_surf: pygame.Surface | None = None
+_vignette_size: tuple[int, int] = (0, 0)
+
+
+def _build_vignette(w: int, h: int) -> pygame.Surface:
+    """
+    Bake a vignette Surface once per resolution.
+    Uses 40 concentric rects with accumulating alpha so the
+    edges are fully opaque and the centre is transparent.
+    """
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    surf.fill((0, 0, 0, 0))
+    steps  = 40
+    depth_x = w // 3
+    depth_y = h // 3
+    for i in range(steps):
+        t   = 1.0 - i / steps          # 1.0 = outermost, 0.0 = innermost
+        a   = int(11 * t * t)           # quadratic: outer layers add more alpha
+        ix  = int(depth_x * i / steps)
+        iy  = int(depth_y * i / steps)
+        pygame.draw.rect(surf, (180, 0, 0, a),
+                         pygame.Rect(ix, iy, w - ix * 2, h - iy * 2))
+    return surf
+
 
 def draw_danger_vignette(screen: pygame.Surface, hp: float, frame: int) -> None:
     """
-    Draw a pulsing red vignette on screen edges when HP is low.
-    - 30 < hp ≤ 50: slow pulse, moderate intensity
-    - hp ≤ 30:      fast pulse, high intensity
+    Draw a pulsing gradient vignette on screen edges when HP is low.
+    - 30 < hp ≤ 50: slow pulse, moderate opacity
+    - hp ≤ 30:      fast pulse, high opacity
     """
     if hp > 50:
         return
 
+    global _vignette_surf, _vignette_size
     w, h = screen.get_size()
 
-    # Pulse speed and intensity scale with how low HP is
-    if hp <= 30:
-        pulse_speed = 0.18    # fast heartbeat rhythm
-        max_alpha   = 140
-    else:
-        pulse_speed = 0.07    # slow pulse
-        max_alpha   = 80
+    # Rebuild if resolution changed
+    if _vignette_surf is None or _vignette_size != (w, h):
+        _vignette_surf = _build_vignette(w, h)
+        _vignette_size = (w, h)
 
-    # Sine wave: 0.0 → 1.0
-    t      = (frame * pulse_speed) % (2 * math.pi)
-    pulse  = (math.sin(t) + 1) / 2
-    alpha  = int(max_alpha * pulse)
+    # Pulse parameters
+    if hp <= 30:
+        speed     = 0.17    # fast — matches heartbeat_fast
+        max_alpha = 210
+    else:
+        speed     = 0.07    # slow
+        max_alpha = 120
+
+    t     = (frame * speed) % (2 * math.pi)
+    pulse = (math.sin(t) + 1) / 2          # 0.0 → 1.0
+    alpha = int(max_alpha * pulse)
 
     if alpha <= 0:
         return
 
-    # Draw 4 gradient-like edge rectangles (top, bottom, left, right)
-    edge = max(12, h // 6)
-    vign_color = (160, 0, 0, alpha)
-
-    vsurf = pygame.Surface((w, h), pygame.SRCALPHA)
-    # Top band
-    pygame.draw.rect(vsurf, vign_color, (0, 0, w, edge))
-    # Bottom band
-    pygame.draw.rect(vsurf, vign_color, (0, h - edge, w, edge))
-    # Left band
-    pygame.draw.rect(vsurf, vign_color, (0, 0, edge, h))
-    # Right band
-    pygame.draw.rect(vsurf, vign_color, (w - edge, 0, edge, h))
-    screen.blit(vsurf, (0, 0))
+    _vignette_surf.set_alpha(alpha)
+    screen.blit(_vignette_surf, (0, 0))
 
 
 # ---------------------------------------------------------------------------
 # Card preview  —  flip all cards face-up at game start, then flip back
 # ---------------------------------------------------------------------------
-_preview_active:  bool  = False
-_preview_timer:   float = 0.0    # ms remaining in hold phase
-_PREVIEW_HOLD_MS: float = 1200.0 # how long cards are shown face-up
+_preview_active:   bool  = False
+_preview_phase:    str   = "flip_in"   # "flip_in" | "hold" | "done"
+_preview_timer:    float = 0.0
+_PREVIEW_FLIP_MS:  float = 250.0   # time to let flip-in animation complete
+_PREVIEW_HOLD_MS:  float = 1200.0  # how long cards stay shown before flip-back
 
 
 def start_preview(cards: list) -> None:
     """
-    Force all cards face-up for ~1.2s then flip them all back simultaneously.
-    Call immediately after game.start_game() inside the transition callback.
-    Input must be blocked while is_preview_active() returns True.
+    Animate all cards flipping face-up, hold for 1.2s, then flip back.
+    Call right after game.start_game() inside the transition callback.
+    Input must be blocked while is_preview_active() is True.
     """
-    global _preview_active, _preview_timer
+    global _preview_active, _preview_phase, _preview_timer
     from card import CardState
     _preview_active = True
-    _preview_timer  = _PREVIEW_HOLD_MS
-    # Temporarily set all FACE_DOWN cards to FACE_UP for rendering
+    _preview_phase  = "flip_in"
+    _preview_timer  = _PREVIEW_FLIP_MS
+
+    # Change state then animate the reveal flip
     for card in cards:
         if card.state == CardState.FACE_DOWN:
             card.state = CardState.FACE_UP
+            start_flip(card)
 
 
 def update_preview(cards: list, dt_ms: float) -> None:
-    """Tick the preview timer. When expired, flip all cards back via animation."""
-    global _preview_active, _preview_timer
+    """Tick the preview phases: flip_in wait → hold → flip back."""
+    global _preview_active, _preview_phase, _preview_timer
     if not _preview_active:
         return
+
     _preview_timer -= dt_ms
+
     if _preview_timer <= 0:
-        _preview_active = False
-        from card import CardState
-        # Flip all currently face-up (preview) cards back down with animation
-        for card in cards:
-            if card.state == CardState.FACE_UP:
-                card.state = CardState.FACE_DOWN
-                start_flip(card)
+        if _preview_phase == "flip_in":
+            # Flip-in done — start the hold phase
+            _preview_phase = "hold"
+            _preview_timer = _PREVIEW_HOLD_MS
+        elif _preview_phase == "hold":
+            # Hold done — flip all preview cards back
+            _preview_active = False
+            from card import CardState
+            for card in cards:
+                if card.state == CardState.FACE_UP:
+                    card.state = CardState.FACE_DOWN
+                    start_flip(card)
 
 
 def is_preview_active() -> bool:
