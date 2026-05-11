@@ -601,7 +601,7 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     w  = screen.get_width()
     h  = screen.get_height()
     cx = w // 2
-    ty = 130   # title vertical center on the 1024x768 screen
+    ty = h // 2 - 140   # Centered vertically (offset to account for menu items below)
 
     # ── OBLIVIO title — 3-layer extruded pixel-art style ──────────────────
     C_DEPTH   = (45, 10, 90)      # deep indigo-purple block depth
@@ -1259,7 +1259,7 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
     w = screen.get_width()
     h = screen.get_height()
     cx = w // 2
-    ty = 130
+    ty = h // 2 - 180   # Centered vertically (offset to account for score and items below)
 
     # ── Title ───────────────────────────────────────────────────────────
     label = "YOU WIN!" if is_win else "GAME OVER"
