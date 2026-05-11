@@ -581,7 +581,7 @@ def main() -> None:
                 cursor_pos = hovered.grid_pos
 
             ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, game.score.decay_fraction, cursor_pos)
-            ui.draw_esc_hint(screen)
+
 
         elif game.state == GameState.PAUSED:
             # Draw the frozen game underneath

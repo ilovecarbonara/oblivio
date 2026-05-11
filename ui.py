@@ -660,9 +660,7 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
             arr = _font_lg.render(">", False, C_ACCENT)
             screen.blit(arr, (cx - item_w // 2 - 44, iy - arr.get_height() // 2))
 
-    # -- Controls hint --
-    hint = _font_sm.render("WASD / Arrows  |  ENTER to select", False, C_DIM)
-    screen.blit(hint, hint.get_rect(centerx=cx, centery=h - 32))
+
 
 
 # ---------------------------------------------------------------------------
@@ -1011,16 +1009,7 @@ def draw_hud(
 # ---------------------------------------------------------------------------
 
 def draw_esc_hint(screen: pygame.Surface) -> None:
-    hint_font = get_gothic_font(18)
-    lines = [
-        "ESC - PAUSE",
-        "WASD / Arrow Keys - move   SPACE - flip card",
-    ]
-    y = screen.get_height() - hint_font.get_height() * len(lines) - 10
-    for line in lines:
-        surf = hint_font.render(line, False, C_DIM)
-        screen.blit(surf, (10, y))
-        y += hint_font.get_height() + 2
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -1085,9 +1074,7 @@ def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> Non
             arr = _font_lg.render(">", False, C_ACCENT)
             screen.blit(arr, (cx - item_w // 2 - 44, iy - arr.get_height() // 2))
 
-    # Controls hint
-    hint = _font_sm.render("WASD / Arrows  |  ENTER to select", False, C_DIM)
-    screen.blit(hint, hint.get_rect(centerx=cx, centery=h - 32))
+
 
 
 # ---------------------------------------------------------------------------
@@ -1247,11 +1234,7 @@ def draw_options_menu(
             _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
                              settings.sfx_volume, is_sel)
 
-    # ── Controls hint ──────────────────────────────────────────────────
-    hint1 = _font_sm.render("UP/DOWN - navigate  |  LEFT/RIGHT - adjust", False, C_DIM)
-    hint2 = _font_sm.render("ENTER - apply & back  |  ESC - back", False, C_DIM)
-    screen.blit(hint1, hint1.get_rect(centerx=cx, centery=h - 56))
-    screen.blit(hint2, hint2.get_rect(centerx=cx, centery=h - 28))
+
 
 # ---------------------------------------------------------------------------
 # Result Screen (Game Over / Win)
@@ -1341,9 +1324,7 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
             arr = _font_lg.render(">", False, C_ACCENT)
             screen.blit(arr, (cx - item_w // 2 - 44, iy - arr.get_height() // 2))
 
-    # ── Controls hint ───────────────────────────────────────────────────
-    hint = _font_sm.render("WASD / Arrows  |  ENTER to select", False, C_DIM)
-    screen.blit(hint, hint.get_rect(centerx=cx, centery=h - 32))
+
 
 # ---------------------------------------------------------------------------
 # Mouse Hover Helpers
