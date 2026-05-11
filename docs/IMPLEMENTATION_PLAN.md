@@ -101,12 +101,12 @@
 
 ### Jim (Visuals / UI)
 
-- [ ] Build the **Main Menu** screen in `ui.py` — game title in pixel font, "Play" and "Quit" buttons
-- [ ] Build the **Grid Selection** screen — "Choose Difficulty" title, three buttons (Easy / Medium / Hard) with brief descriptions
-- [ ] Build the **Game Over** screen — "GAME OVER" title, final score display, "Play Again" and "Main Menu" buttons
-- [ ] Build the **Win** screen — "YOU WIN!" title, final score display, "Play Again" and "Main Menu" buttons
-- [ ] Render the **HP bar** on the game screen — pixel-art segmented bar, color shifts (green → yellow → red) based on HP percentage
-- [ ] Render the **live score** counter on the game screen
+- [x] Build the **Main Menu** screen in `ui.py` — game title in pixel font, "Play" and "Quit" buttons
+- [x] Build the **Grid Selection** screen — "Choose Difficulty" title, three buttons (Easy / Medium / Hard) with brief descriptions
+- [x] Build the **Game Over** screen — "GAME OVER" title, final score display, "Play Again" and "Main Menu" buttons
+- [x] Build the **Win** screen — "YOU WIN!" title, final score display, "Play Again" and "Main Menu" buttons
+- [x] Render the **HP bar** on the game screen — pixel-art segmented bar, color shifts (green → yellow → red) based on HP percentage
+- [x] Render the **live score** counter on the game screen
 
 **Branch:** `week-3/Jim/screens-and-hud`
 

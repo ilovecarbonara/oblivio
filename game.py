@@ -312,7 +312,7 @@ class Game:
 
     def update(self, dt_ms: float) -> Optional[list[Card]]:
         """
-        Per-frame update.  Manages the mismatch countdown timer.
+        Per-frame update.  Manages the mismatch countdown timer and score decay.
 
         Parameters
         ----------
@@ -326,6 +326,9 @@ class Game:
             expiry, so main.py can trigger UI animations.  Returns
             None on every other frame.
         """
+        if self.score.tick(dt_ms):
+            print("[STREAK] Multiplier timed out — streak reset")
+
         # --- Pending win delay (let last flip animation play) ---
         if self._win_pending:
             self._win_delay -= dt_ms

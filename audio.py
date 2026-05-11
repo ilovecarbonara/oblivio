@@ -23,13 +23,27 @@ _SFX_G  = os.path.join(_HERE, "game-assets", "sfx", "in-game")
 _BGM_MENU  = os.path.join(_MUSIC, "Tetuano_menuBGM.mp3")
 _BGM_GAME  = os.path.join(_MUSIC, "CriticalTheme_Loopable.wav")
 
+_SFX_INGAME = os.path.join(_HERE, "game-assets", "sfx", "in-game")
+
 _SFX_FILES = {
     "hover":    os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Select - 1.wav"),
     "select":   os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Select - 2.wav"),
     "cancel":   os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Cancel - 1.wav"),
     "popup":    os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Popup Open - 1.wav"),
-    "mismatch": os.path.join(_SFX_G, "JDSherbert - Ultimate UI SFX Pack - Cancel - 2.wav"),
+    "flip_1":   os.path.join(_SFX_INGAME, "card_draw_1.wav"),
+    "flip_2":   os.path.join(_SFX_INGAME, "card_draw_2.wav"),
+    "flip_3":   os.path.join(_SFX_INGAME, "card_draw_3.wav"),
+    "cursor":   os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Cursor - 1.wav"),
+    "mismatch": os.path.join(_SFX_INGAME, "JDSherbert - Ultimate UI SFX Pack - Cancel - 2.wav"),
 }
+
+# Heartbeat tracks — loaded separately, played on a dedicated channel
+_HB_SLOW_PATH = os.path.join(_SFX_INGAME, "heart_beat_human_a_slow.wav")
+_HB_FAST_PATH = os.path.join(_SFX_INGAME, "heart_beat_human_a_fast.wav")
+_hb_slow: pygame.mixer.Sound | None = None
+_hb_fast: pygame.mixer.Sound | None = None
+_hb_channel: pygame.mixer.Channel | None = None
+_hb_state: str | None = None   # None | "slow" | "fast"
 
 # ---------------------------------------------------------------------------
 # Internal state
@@ -46,21 +60,39 @@ _menu_bgm_channel: pygame.mixer.Channel | None = None
 
 def init(master_vol: float = 1.0, music_vol: float = 1.0, sfx_vol: float = 1.0) -> None:
     """Load all SFX. Call once after pygame.mixer.init()."""
-    global _menu_bgm_snd, _menu_bgm_channel
+    global _menu_bgm_snd, _menu_bgm_channel, _hb_slow, _hb_fast, _hb_channel
+
+    # Ensure enough channels and reserve dedicated ones so auto-play never
+    # assigns SFX sounds to channels used by heartbeat (1) or menu BGM (7).
+    pygame.mixer.set_num_channels(16)
+    pygame.mixer.set_reserved(2)   # protects channels 0 and 1
+
     for key, path in _SFX_FILES.items():
         if os.path.exists(path):
             _sounds[key] = pygame.mixer.Sound(path)
         else:
             print(f"[AUDIO] Missing SFX: {path}")
-            
+
+    # Heartbeat tracks on dedicated channel 1
+    if os.path.exists(_HB_SLOW_PATH):
+        _hb_slow = pygame.mixer.Sound(_HB_SLOW_PATH)
+    else:
+        print(f"[AUDIO] Missing heartbeat slow: {_HB_SLOW_PATH}")
+    if os.path.exists(_HB_FAST_PATH):
+        _hb_fast = pygame.mixer.Sound(_HB_FAST_PATH)
+    else:
+        print(f"[AUDIO] Missing heartbeat fast: {_HB_FAST_PATH}")
+    _hb_channel = pygame.mixer.Channel(1)
+
     if os.path.exists(_BGM_MENU):
         try:
             _menu_bgm_snd = pygame.mixer.Sound(_BGM_MENU)
             _menu_bgm_channel = pygame.mixer.Channel(7)
         except Exception as e:
             print(f"[AUDIO] Failed to load menu BGM as Sound: {e}")
-            
+
     apply_volumes(master_vol, music_vol, sfx_vol)
+
 
 
 def apply_volumes(master_vol: float, music_vol: float, sfx_vol: float) -> None:
@@ -69,6 +101,8 @@ def apply_volumes(master_vol: float, music_vol: float, sfx_vol: float) -> None:
     eff_music = master_vol * music_vol
     for snd in _sounds.values():
         snd.set_volume(eff_sfx)
+    if _hb_slow: _hb_slow.set_volume(eff_sfx)
+    if _hb_fast: _hb_fast.set_volume(eff_sfx)
     pygame.mixer.music.set_volume(eff_music)
     if _menu_bgm_snd:
         _menu_bgm_snd.set_volume(eff_music)
@@ -88,7 +122,66 @@ def sfx_hover()    -> None: _play("hover")
 def sfx_select()   -> None: _play("select")
 def sfx_cancel()   -> None: _play("cancel")
 def sfx_popup()    -> None: _play("popup")
+def sfx_flip()     -> None:
+    import random
+    _play(random.choice(["flip_1", "flip_2", "flip_3"]))
+def sfx_cursor()   -> None: _play("cursor")
 def sfx_mismatch() -> None: _play("mismatch")
+
+
+# ---------------------------------------------------------------------------
+# Heartbeat — dedicated looping channel, BGM ducked when active
+# ---------------------------------------------------------------------------
+_DUCK_VOLUME = 0.35   # BGM volume when heartbeat is playing
+
+
+def update_heartbeat(hp: float, music_vol: float, master_vol: float) -> None:
+    """
+    Call every frame with current HP.
+    - hp <= 50: slow heartbeat starts, BGM ducks
+    - hp <= 30: fast heartbeat replaces slow, BGM ducks further
+    - hp > 50:  heartbeat stops, BGM restored
+    Transitions are guarded so tracks don't restart on every frame.
+    """
+    global _hb_state
+    if _hb_channel is None:
+        return
+
+    base_music_vol = master_vol * music_vol
+
+    if hp <= 0:
+        # Dead — let game_over handle stopping everything
+        return
+    elif hp <= 30:
+        if _hb_state != "fast":
+            _hb_state = "fast"
+            _hb_channel.stop()
+            if _hb_fast:
+                _hb_channel.play(_hb_fast, loops=-1)
+            # Duck BGM significantly
+            pygame.mixer.music.set_volume(base_music_vol * _DUCK_VOLUME)
+    elif hp <= 50:
+        if _hb_state != "slow":
+            _hb_state = "slow"
+            _hb_channel.stop()
+            if _hb_slow:
+                _hb_channel.play(_hb_slow, loops=-1)
+            # Duck BGM slightly
+            pygame.mixer.music.set_volume(base_music_vol * 0.6)
+    else:
+        if _hb_state is not None:
+            _hb_state = None
+            _hb_channel.stop()
+            # Restore BGM to full volume
+            pygame.mixer.music.set_volume(base_music_vol)
+
+
+def heartbeat_stop() -> None:
+    """Stop heartbeat and restore BGM volume. Call on pause/game-over/menu."""
+    global _hb_state
+    _hb_state = None
+    if _hb_channel:
+        _hb_channel.stop()
 
 
 # ---------------------------------------------------------------------------

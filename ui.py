@@ -362,6 +362,147 @@ def draw_transition(screen: pygame.Surface) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Danger vignette  —  smooth gradient pulsing when HP ≤ 50
+# ---------------------------------------------------------------------------
+
+def draw_danger_vignette(screen: pygame.Surface, hp: float, frame: int) -> None:
+    """
+    Draw a pulsing gradient vignette on screen edges when HP is low.
+    - 30 < hp ≤ 50: slow pulse, moderate intensity
+    - hp ≤ 30:      fast, intense pulse matching the fast heartbeat
+
+    Uses 22 concentric gradient bands drawn outer→inner so the center
+    is progressively overwritten with lower alpha, creating a smooth
+    edge-glow that fades to transparent at the screen centre.
+    """
+    if hp > 50:
+        return
+
+    w, h = screen.get_size()
+
+    if hp <= 30:
+        speed     = 0.17
+        max_alpha = 200
+    else:
+        speed     = 0.07
+        max_alpha = 120
+
+    t     = (frame * speed) % (2 * math.pi)
+    pulse = (math.sin(t) + 1) / 2          # 0.0 → 1.0
+    base_alpha = int(max_alpha * pulse)
+
+    if base_alpha <= 0:
+        return
+
+    vsurf   = pygame.Surface((w, h), pygame.SRCALPHA)
+    bands   = 22
+    depth_x = w // 4    # how far the glow extends inward horizontally
+    depth_y = h // 4    # how far the glow extends inward vertically
+
+    # Outer → inner: outermost rect drawn first (high alpha).
+    # Each subsequent smaller rect overwrites the centre with lower alpha
+    # so the gradient naturally fades toward the middle.
+    for i in range(1, bands + 1):
+        t_b = 1.0 - i / bands                   # 1.0 (outermost) → ~0 (innermost)
+        a   = int(base_alpha * t_b ** 1.8)       # power curve: dark at edge, clears fast
+        ix  = int(depth_x * i / bands)
+        iy  = int(depth_y * i / bands)
+        pygame.draw.rect(vsurf, (190, 0, 0, a),
+                         pygame.Rect(ix, iy, w - ix * 2, h - iy * 2))
+
+    screen.blit(vsurf, (0, 0))
+
+
+# ---------------------------------------------------------------------------
+# Card preview  —  flip all cards face-up at game start, then flip back
+# ---------------------------------------------------------------------------
+_preview_active:   bool  = False
+_preview_phase:    str   = "flip_in"   # "flip_in" | "hold" | "flip_out"
+_preview_timer:    float = 0.0
+_preview_col:      int   = 0
+_preview_max_cols: int   = 0
+
+_PREVIEW_STAGGER_MS: float = 60.0    # delay between each column flip
+_PREVIEW_HOLD_MS:    float = 1000.0  # how long cards stay shown before flip-back
+
+
+def start_preview(cards: list) -> None:
+    """
+    Animate all cards flipping face-up in a wave from left to right.
+    Input must be blocked while is_preview_active() is True.
+    """
+    global _preview_active, _preview_phase, _preview_timer, _preview_col, _preview_max_cols
+    
+    _preview_active = True
+    _preview_phase  = "flip_in"
+    _preview_timer  = 0.0
+    _preview_col    = 0
+    _preview_max_cols = max((c.grid_pos[0] for c in cards), default=0)
+
+
+def update_preview(cards: list, dt_ms: float) -> None:
+    """Tick the preview phases: staggered flip_in → hold → staggered flip_out."""
+    global _preview_active, _preview_phase, _preview_timer, _preview_col
+    if not _preview_active:
+        return
+
+    _preview_timer -= dt_ms
+
+    if _preview_timer <= 0:
+        from card import CardState
+        import audio
+
+        if _preview_phase == "flip_in":
+            # Flip one column
+            flipped_any = False
+            for c in cards:
+                if c.grid_pos[0] == _preview_col and c.state == CardState.FACE_DOWN:
+                    c.state = CardState.FACE_UP
+                    start_flip(c)
+                    flipped_any = True
+            
+            if flipped_any:
+                audio.sfx_flip()
+
+            _preview_col += 1
+            if _preview_col > _preview_max_cols:
+                # All columns flipped, wait for the last animation (250ms) + hold time
+                _preview_phase = "hold"
+                _preview_timer = 250.0 + _PREVIEW_HOLD_MS
+            else:
+                _preview_timer = _PREVIEW_STAGGER_MS
+
+        elif _preview_phase == "hold":
+            # Hold done, start closing wave
+            _preview_phase = "flip_out"
+            _preview_col   = 0
+            _preview_timer = 0.0
+
+        elif _preview_phase == "flip_out":
+            # Close one column
+            flipped_any = False
+            for c in cards:
+                if c.grid_pos[0] == _preview_col and c.state == CardState.FACE_UP:
+                    c.state = CardState.FACE_DOWN
+                    start_flip(c)
+                    flipped_any = True
+            
+            if flipped_any:
+                audio.sfx_flip()
+
+            _preview_col += 1
+            if _preview_col > _preview_max_cols:
+                _preview_active = False
+            else:
+                _preview_timer = _PREVIEW_STAGGER_MS
+
+
+
+def is_preview_active() -> bool:
+    return _preview_active
+
+
+# ---------------------------------------------------------------------------
 # Mismatch flash
 # ---------------------------------------------------------------------------
 _flash:  dict[int, float] = {}
@@ -661,35 +802,67 @@ def draw_card_grid(
     card_w: int,
     card_h: int,
     multiplier: float = 1.0,
+    decay_fraction: float = 1.0,
     cursor_pos: tuple[int, int] | None = None,
 ) -> None:
     set_cursor(cursor_pos)
     for card in cards:
         draw_card(screen, card, card_w, card_h)
 
-    # Draw persistent multiplier badge on the top right corner of the grid
-    if multiplier > 1.0 and cards:
-        max_x = max(c.rect.right for c in cards)
-        min_y = min(c.rect.top for c in cards)
+    # Draw persistent multiplier badge — animated, pulsing, color-shifted, and decaying
+    if multiplier > 1.0 and cards and decay_fraction > 0:
+        import time
+        now_ms  = pygame.time.get_ticks()
+
+        # Bounce: gentle sine scale wobble (faster at higher multipliers)
+        wobble_speed = 0.003 + (multiplier - 1.0) * 0.001
+        wobble       = 1.0 + 0.06 * math.sin(now_ms * wobble_speed)
+
+        # Color: magenta (×1) → orange (×2) → bright yellow (×4+)
+        t_col = min(1.0, (multiplier - 1.0) / 3.0)
+        r_c = int(243 + (255 - 243) * t_col)
+        g_c = int(  2 + (200 -   2) * t_col)
+        b_c = int( 97 + (  0 -  97) * t_col)
+        badge_color = (max(0, min(255, r_c)),
+                       max(0, min(255, g_c)),
+                       max(0, min(255, b_c)))
+
+        # Shrink as it decays, with a minimum size floor
+        effective_scale = max(0.4, decay_fraction)
+        base_size  = (38 + int(multiplier * 3)) * effective_scale
+        font       = get_gothic_font(int(base_size * wobble))
+
+        max_x = max(c.rect.right  for c in cards)
+        min_y = min(c.rect.top    for c in cards)
+
+        text_surf   = font.render(f"×{multiplier:.1f}", False, badge_color)
+        shadow_surf = font.render(f"×{multiplier:.1f}", False, C_ACCENT_DK)
+
+        # Fade out alpha based on decay_fraction
+        alpha = int(255 * min(1.0, decay_fraction * 1.5))  # Fade starts later
         
-        font = get_gothic_font(42)  # slightly larger and juicy
-        
-        # Text and shadow
-        text_surf = font.render(f"{multiplier:.1f}x", False, C_ACCENT)
-        shadow_surf = font.render(f"{multiplier:.1f}x", False, C_ACCENT_DK)
-        
-        # Tilt to the right
-        text_surf = pygame.transform.rotate(text_surf, -15)
-        shadow_surf = pygame.transform.rotate(shadow_surf, -15)
-        
-        # Position offset: place the bottom-left of the text near the top-right of the grid
-        tw = text_surf.get_width()
-        th = text_surf.get_height()
-        tx = max_x - tw // 2 + 10
-        ty = min_y - th // 2 - 10
-        
-        screen.blit(shadow_surf, (tx + 4, ty + 4))
+        # Flash urgency when under 20%
+        if decay_fraction < 0.2:
+            flash_alpha = int(120 + 135 * math.sin(now_ms * 0.03))
+            alpha = min(alpha, flash_alpha)
+
+        text_surf.set_alpha(alpha)
+        shadow_surf.set_alpha(alpha)
+
+        # Tilt slightly right for energy
+        text_surf   = pygame.transform.rotate(text_surf,   -12)
+        shadow_surf = pygame.transform.rotate(shadow_surf, -12)
+
+        tw, th = text_surf.get_size()
+        tx = max_x - tw // 2 + 14
+        ty = min_y - th // 2 - 14
+
+        # Drop shadow
+        screen.blit(shadow_surf, (tx + 5, ty + 5))
+        # Main text
         screen.blit(text_surf, (tx, ty))
+
+
 
 # ---------------------------------------------------------------------------
 # Floating Text & Score Juice
@@ -751,31 +924,35 @@ def draw_hud(
     set_hp(hp)
     _tick_hp()
 
-    # ── Pixelated health bar ────────────────────────────────────────────────
-    if _PX_BAR_FRAMES:
-        fidx = _hp_to_frame_idx(_hp_drawn)
-        bar_surf = _PX_BAR_FRAMES[fidx]
+    # ── Custom drawn health bar ──────────────────────────────────────────────
+    bar_x         = 14
+    bar_display_w = 200
+    bar_display_h = 14
+    bar_top_y     = hud_h // 2 - bar_display_h // 2
 
-        # Scale up 4× (nearest-neighbour) so the pixel art stays chunky
-        bar_display_w = _BAR_W * 4
-        bar_display_h = _BAR_H * 4
-        bar_scaled = pygame.transform.scale(bar_surf, (bar_display_w, bar_display_h))
+    fill_w  = max(0, int(bar_display_w * (_hp_drawn / 100.0)))
+    hp_frac = _hp_drawn / 100.0
 
-        # Single bar, centered vertically in the HUD strip
-        bar_x     = 14
-        bar_top_y = hud_h // 2 - bar_display_h // 2
-        screen.blit(bar_scaled, (bar_x, bar_top_y))
-    else:
-        # Fallback drawn bar if sprite not loaded
-        bar_x = 14
-        bar_display_w = 168
-        bar_display_h = 12
-        bar_top_y = hud_h // 2 - bar_display_h
-        fill_w = max(0, int(bar_display_w * (_hp_drawn / 100.0)))
-        pygame.draw.rect(screen, (25, 10, 35), (bar_x, bar_top_y, bar_display_w, bar_display_h))
-        if fill_w > 0:
-            pygame.draw.rect(screen, C_ACCENT, (bar_x, bar_top_y, fill_w, bar_display_h))
-        pygame.draw.rect(screen, C_ACCENT_DK, (bar_x, bar_top_y, bar_display_w, bar_display_h), 1)
+    # Color: magenta (#F30261) at full → deep crimson (#8B0000) at critical
+    r = int(243 + (139 - 243) * (1.0 - hp_frac))
+    g = int(  2 + (  0 -   2) * (1.0 - hp_frac))
+    b = int( 97 + (  0 -  97) * (1.0 - hp_frac))
+    bar_color = (max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
+
+    # Track (empty portion)
+    pygame.draw.rect(screen, (18, 6, 28), (bar_x, bar_top_y, bar_display_w, bar_display_h), border_radius=3)
+    # Fill
+    if fill_w > 0:
+        pygame.draw.rect(screen, bar_color, (bar_x, bar_top_y, fill_w, bar_display_h), border_radius=3)
+    # Border
+    pygame.draw.rect(screen, C_ACCENT_DK, (bar_x, bar_top_y, bar_display_w, bar_display_h), 1, border_radius=3)
+
+    # HP text label above the bar
+    label_font = get_gothic_font(14)
+    hp_int     = max(0, int(round(_hp_drawn)))
+    hp_surf    = label_font.render(f"{hp_int}/100 HP", False, C_DIM)
+    screen.blit(hp_surf, (bar_x, bar_top_y - hp_surf.get_height() - 2))
+
 
     # ── Scoreboard (Gothic Housing + Juice) ─────────────────────────────────
     box_w = 240
