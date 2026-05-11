@@ -417,56 +417,85 @@ def draw_danger_vignette(screen: pygame.Surface, hp: float, frame: int) -> None:
 # Card preview  —  flip all cards face-up at game start, then flip back
 # ---------------------------------------------------------------------------
 _preview_active:   bool  = False
-_preview_phase:    str   = "flip_in"   # "flip_in" | "hold" | "done"
+_preview_phase:    str   = "flip_in"   # "flip_in" | "hold" | "flip_out"
 _preview_timer:    float = 0.0
-_PREVIEW_FLIP_MS:  float = 250.0   # time to let flip-in animation complete
-_PREVIEW_HOLD_MS:  float = 1200.0  # how long cards stay shown before flip-back
+_preview_col:      int   = 0
+_preview_max_cols: int   = 0
+
+_PREVIEW_STAGGER_MS: float = 60.0    # delay between each column flip
+_PREVIEW_HOLD_MS:    float = 1000.0  # how long cards stay shown before flip-back
 
 
 def start_preview(cards: list) -> None:
     """
-    Animate all cards flipping face-up, hold for 1.2s, then flip back.
-    Call right after game.start_game() inside the transition callback.
+    Animate all cards flipping face-up in a wave from left to right.
     Input must be blocked while is_preview_active() is True.
     """
-    global _preview_active, _preview_phase, _preview_timer
-    from card import CardState
-    import audio
+    global _preview_active, _preview_phase, _preview_timer, _preview_col, _preview_max_cols
     
     _preview_active = True
     _preview_phase  = "flip_in"
-    _preview_timer  = _PREVIEW_FLIP_MS
-    
-    audio.sfx_flip()
-
-    # Change state then animate the reveal flip
-    for card in cards:
-        if card.state == CardState.FACE_DOWN:
-            card.state = CardState.FACE_UP
-            start_flip(card)
+    _preview_timer  = 0.0
+    _preview_col    = 0
+    _preview_max_cols = max((c.grid_pos[0] for c in cards), default=0)
 
 
 def update_preview(cards: list, dt_ms: float) -> None:
-    """Tick the preview phases: flip_in wait → hold → flip back."""
-    global _preview_active, _preview_phase, _preview_timer
+    """Tick the preview phases: staggered flip_in → hold → staggered flip_out."""
+    global _preview_active, _preview_phase, _preview_timer, _preview_col
     if not _preview_active:
         return
 
     _preview_timer -= dt_ms
 
     if _preview_timer <= 0:
+        from card import CardState
+        import audio
+
         if _preview_phase == "flip_in":
-            # Flip-in done — start the hold phase
-            _preview_phase = "hold"
-            _preview_timer = _PREVIEW_HOLD_MS
+            # Flip one column
+            flipped_any = False
+            for c in cards:
+                if c.grid_pos[0] == _preview_col and c.state == CardState.FACE_DOWN:
+                    c.state = CardState.FACE_UP
+                    start_flip(c)
+                    flipped_any = True
+            
+            if flipped_any:
+                audio.sfx_flip()
+
+            _preview_col += 1
+            if _preview_col > _preview_max_cols:
+                # All columns flipped, wait for the last animation (250ms) + hold time
+                _preview_phase = "hold"
+                _preview_timer = 250.0 + _PREVIEW_HOLD_MS
+            else:
+                _preview_timer = _PREVIEW_STAGGER_MS
+
         elif _preview_phase == "hold":
-            # Hold done — flip all preview cards back
-            _preview_active = False
-            from card import CardState
-            for card in cards:
-                if card.state == CardState.FACE_UP:
-                    card.state = CardState.FACE_DOWN
-                    start_flip(card)
+            # Hold done, start closing wave
+            _preview_phase = "flip_out"
+            _preview_col   = 0
+            _preview_timer = 0.0
+
+        elif _preview_phase == "flip_out":
+            # Close one column
+            flipped_any = False
+            for c in cards:
+                if c.grid_pos[0] == _preview_col and c.state == CardState.FACE_UP:
+                    c.state = CardState.FACE_DOWN
+                    start_flip(c)
+                    flipped_any = True
+            
+            if flipped_any:
+                audio.sfx_flip()
+
+            _preview_col += 1
+            if _preview_col > _preview_max_cols:
+                _preview_active = False
+            else:
+                _preview_timer = _PREVIEW_STAGGER_MS
+
 
 
 def is_preview_active() -> bool:

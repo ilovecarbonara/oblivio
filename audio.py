@@ -30,7 +30,9 @@ _SFX_FILES = {
     "select":   os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Select - 2.wav"),
     "cancel":   os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Cancel - 1.wav"),
     "popup":    os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Popup Open - 1.wav"),
-    "flip":     os.path.join(_SFX_INGAME, "card_draw_1.wav"),
+    "flip_1":   os.path.join(_SFX_INGAME, "card_draw_1.wav"),
+    "flip_2":   os.path.join(_SFX_INGAME, "card_draw_2.wav"),
+    "flip_3":   os.path.join(_SFX_INGAME, "card_draw_3.wav"),
     "cursor":   os.path.join(_SFX_I, "JDSherbert - Ultimate UI SFX Pack - Cursor - 1.wav"),
     "mismatch": os.path.join(_SFX_INGAME, "JDSherbert - Ultimate UI SFX Pack - Cancel - 2.wav"),
 }
@@ -120,7 +122,9 @@ def sfx_hover()    -> None: _play("hover")
 def sfx_select()   -> None: _play("select")
 def sfx_cancel()   -> None: _play("cancel")
 def sfx_popup()    -> None: _play("popup")
-def sfx_flip()     -> None: _play("flip")
+def sfx_flip()     -> None:
+    import random
+    _play(random.choice(["flip_1", "flip_2", "flip_3"]))
 def sfx_cursor()   -> None: _play("cursor")
 def sfx_mismatch() -> None: _play("mismatch")
 
