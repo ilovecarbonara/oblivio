@@ -1414,7 +1414,7 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
 # ---------------------------------------------------------------------------
 # Difficulty Selection
 # ---------------------------------------------------------------------------
-DIFFICULTY_ITEMS = ["Easy  (4x4)", "Medium  (6x6)", "Hard  (8x8)", "Back"]
+DIFFICULTY_ITEMS = ["Mortal", "Scorched", "Hellish", "Back"]
 _diff_rects: list[pygame.Rect] = []
 
 def draw_difficulty_select(screen: pygame.Surface, selected: int, frame: int) -> None:

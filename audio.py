@@ -202,15 +202,14 @@ def bgm_play_menu() -> None:
 
 def bgm_play_game(difficulty_label: str = "") -> None:
     """
-    Play in-game BGM if a track exists for this difficulty.
-    Currently only Easy (4x4) has BGM — others play silence.
+    Play in-game BGM, looping. All difficulties use the same game track.
     """
     global _bgm_state
     _bgm_state = "game"
     if _menu_bgm_channel:
         _menu_bgm_channel.stop()
-        
-    if difficulty_label.lower() == "easy" and os.path.exists(_BGM_GAME):
+
+    if os.path.exists(_BGM_GAME):
         pygame.mixer.music.load(_BGM_GAME)
         pygame.mixer.music.play(-1)
     else:

@@ -56,7 +56,7 @@ class Difficulty(Enum):
     """
     EASY   = ("Easy",   4, 4,  8, 10)
     MEDIUM = ("Medium", 6, 6, 18, 15)
-    HARD   = ("Hard",   8, 8, 32, 20)
+    HARD   = ("Hellish", 8, 8, 32, 20)
 
     def __init__(
         self,

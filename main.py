@@ -169,6 +169,7 @@ def main() -> None:
     _prev_pause_sel:   int = pause_selected
     _prev_powerup_sel: int = powerup_selected
     _prev_options_sel: int = options_selected
+    _prev_result_sel:  int = result_selected
     _prev_hovered_card       = None   # tracks mouse-hover card changes in PLAYING
 
 
@@ -247,6 +248,14 @@ def main() -> None:
                         audio.sfx_cancel()
                         def _to_menu_cb():
                             game.to_menu()
+                        ui.start_transition(_to_menu_cb)
+                    elif game.state == GameState.POWERUP_SELECT:
+                        audio.sfx_cancel()
+                        def _to_menu_cb():
+                            nonlocal cursor_pos
+                            game.to_menu()
+                            cursor_pos = None
+                            audio.bgm_play_menu()
                         ui.start_transition(_to_menu_cb)
                     elif game.state in (GameState.GAME_OVER, GameState.WIN):
                         audio.sfx_cancel()
@@ -388,6 +397,7 @@ def main() -> None:
                         elif powerup_selected == 2: # EXTRA LIFE
                             game.has_extra_life = True
                         game.state = GameState.PLAYING
+                        audio.bgm_stop()                        # force-stop menu BGM channel
                         audio.bgm_play_game(game.difficulty.label)
 
                     # --- Playing (SPACE only — flip card) ---
@@ -473,7 +483,7 @@ def main() -> None:
                                 print(f"[INFO] Restarted — difficulty: {_diff_ga.label} ({_diff_ga.cols}×{_diff_ga.rows})")
                             ui.start_transition(_play_again_cb)
                         else:                          # MAIN MENU
-                            audio.sfx_cancel()
+                            audio.sfx_select()
                             def _to_menu_cb():
                                 nonlocal cursor_pos
                                 game.to_menu()
@@ -548,7 +558,7 @@ def main() -> None:
         # Detect transition to GAME_OVER or WIN — stop BGM + heartbeat
         if game.state != _prev_state:
             if game.state in (GameState.GAME_OVER, GameState.WIN):
-                audio.bgm_stop()
+                audio.bgm_play_menu()
                 audio.heartbeat_stop()
                 ui.start_result_anim()
             elif game.state == GameState.MENU and _prev_state not in (
@@ -573,6 +583,9 @@ def main() -> None:
         elif game.state == GameState.POWERUP_SELECT and powerup_selected != _prev_powerup_sel:
             audio.sfx_hover()
             _prev_powerup_sel = powerup_selected
+        elif game.state in (GameState.GAME_OVER, GameState.WIN) and result_selected != _prev_result_sel:
+            audio.sfx_hover()
+            _prev_result_sel = result_selected
 
         # -------------------------------------------------- animation ticks
         ui.update_flips()
