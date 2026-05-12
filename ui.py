@@ -1238,19 +1238,49 @@ def draw_options_menu(
 # ---------------------------------------------------------------------------
 # Result Screen (Game Over / Win)
 # ---------------------------------------------------------------------------
+_result_anim_timer: float = 0.0
+
+def start_result_anim() -> None:
+    global _result_anim_timer
+    _result_anim_timer = 0.0
+
+def update_result_anim(dt_ms: float) -> None:
+    global _result_anim_timer
+    _result_anim_timer += dt_ms
+
 RESULT_ITEMS = ["PLAY AGAIN", "MAIN MENU"]
 _result_rects: list[pygame.Rect] = []
 
 def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selected: int, frame: int) -> None:
     """
-    Game Over / Win screen matching the Main Menu aesthetic.
+    Game Over / Win screen matching the Main Menu aesthetic with dramatic fade-in.
     """
-    global _result_rects
+    global _result_rects, _result_anim_timer
     _result_rects.clear()
 
     c = get_canvas()
     draw_creepy_void(c, frame)
     blit_canvas_to_screen(screen)
+
+    # ── Animation Timings ────────────────────────────────────────────────
+    t = _result_anim_timer
+    if is_win:
+        bg_alpha    = 255
+        title_alpha = min(255, max(0, int((t / 300.0) * 255)))
+        score_alpha = min(255, max(0, int(((t - 200.0) / 300.0) * 255)))
+        btn_alpha   = min(255, max(0, int(((t - 200.0) / 300.0) * 255)))
+    else:
+        # Dramatic but faster reveal for YOU DIED
+        bg_alpha    = min(255, max(0, int((t / 800.0) * 255)))
+        title_alpha = min(255, max(0, int(((t - 600.0) / 1000.0) * 255)))
+        score_alpha = min(255, max(0, int(((t - 1400.0) / 600.0) * 255)))
+        btn_alpha   = min(255, max(0, int(((t - 1400.0) / 600.0) * 255)))
+
+    # ── Background Fade ──────────────────────────────────────────────────
+    if bg_alpha < 255:
+        fade_surf = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        fade_surf.fill((0, 0, 0, 255 - bg_alpha))
+        screen.blit(fade_surf, (0, 0))
 
     if _font_title is None or _font_lg is None or _font_sm is None:
         return
@@ -1258,10 +1288,10 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
     w = screen.get_width()
     h = screen.get_height()
     cx = w // 2
-    ty = h // 2 - 180   # Centered vertically (offset to account for score and items below)
+    ty = h // 2 - 180   # Centered vertically
 
     # ── Title ───────────────────────────────────────────────────────────
-    label = "YOU WIN!" if is_win else "GAME OVER"
+    label = "YOU WIN!" if is_win else "YOU DIED"
     color = C_ACCENT
 
     C_DEPTH   = (45, 10, 90)
@@ -1269,34 +1299,42 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
     DEPTH     = 10
     OUTLINE   = 3
 
-    depth_surf   = _font_title.render(label, False, C_DEPTH)
-    outline_surf = _font_title.render(label, False, C_OUTLINE)
-    title_surf   = _font_title.render(label, False, color)
-    title_rect   = title_surf.get_rect(centerx=cx, centery=ty)
+    if title_alpha > 0:
+        depth_surf   = _font_title.render(label, False, C_DEPTH)
+        depth_surf.set_alpha(title_alpha)
+        outline_surf = _font_title.render(label, False, C_OUTLINE)
+        outline_surf.set_alpha(title_alpha)
+        title_surf   = _font_title.render(label, False, color)
+        title_surf.set_alpha(title_alpha)
+        title_rect   = title_surf.get_rect(centerx=cx, centery=ty)
 
-    for d in range(DEPTH, 0, -1):
-        dr = depth_surf.get_rect(centerx=cx + d, centery=ty + d)
-        screen.blit(depth_surf, dr)
+        for d in range(DEPTH, 0, -1):
+            dr = depth_surf.get_rect(centerx=cx + d, centery=ty + d)
+            screen.blit(depth_surf, dr)
 
-    for ox in range(-OUTLINE, OUTLINE + 1):
-        for oy in range(-OUTLINE, OUTLINE + 1):
-            if ox == 0 and oy == 0:
-                continue
-            or_ = outline_surf.get_rect(centerx=cx + ox, centery=ty + oy)
-            screen.blit(outline_surf, or_)
+        for ox in range(-OUTLINE, OUTLINE + 1):
+            for oy in range(-OUTLINE, OUTLINE + 1):
+                if ox == 0 and oy == 0:
+                    continue
+                or_ = outline_surf.get_rect(centerx=cx + ox, centery=ty + oy)
+                screen.blit(outline_surf, or_)
 
-    screen.blit(title_surf, title_rect)
+        screen.blit(title_surf, title_rect)
 
-    # ── Separator ───────────────────────────────────────────────────────
-    sep_y = title_rect.bottom + 20
-    line_w = title_surf.get_width() // 2 + 60
-    pygame.draw.line(screen, C_ACCENT, (cx - line_w, sep_y), (cx - 50, sep_y), 2)
-    pygame.draw.line(screen, C_ACCENT, (cx + 50,  sep_y), (cx + line_w, sep_y), 2)
+        # ── Separator ───────────────────────────────────────────────────────
+        sep_y = title_rect.bottom + 20
+        line_w = title_surf.get_width() // 2 + 60
+        sep_surf = pygame.Surface((screen.get_width(), 4), pygame.SRCALPHA)
+        pygame.draw.line(sep_surf, (*C_ACCENT, title_alpha), (cx - line_w, 2), (cx - 50, 2), 2)
+        pygame.draw.line(sep_surf, (*C_ACCENT, title_alpha), (cx + 50, 2), (cx + line_w, 2), 2)
+        screen.blit(sep_surf, (0, sep_y - 2))
 
     # ── Score ───────────────────────────────────────────────────────────
-    score_y = sep_y + 60
-    sc = _font_lg.render(f"SCORE {score:06d}", False, C_WHITE)
-    screen.blit(sc, sc.get_rect(centerx=cx, centery=score_y))
+    score_y = ty + 150
+    if score_alpha > 0:
+        sc = _font_lg.render(f"SCORE {score:06d}", False, C_WHITE)
+        sc.set_alpha(score_alpha)
+        screen.blit(sc, sc.get_rect(centerx=cx, centery=score_y))
 
     # ── Menu items ──────────────────────────────────────────────────────
     item_y0 = score_y + 80
@@ -1307,18 +1345,24 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
         iy = item_y0 + i * item_spacing
 
         display_label = f"> {label_str} <" if is_sel else label_str
-        item_s = _font_lg.render(display_label, False, color_item)
-        item_w = item_s.get_width()
-        item_h = item_s.get_height()
+        
+        # Always build rects so hover detection doesn't break, even if invisible
+        item_s_hidden = _font_lg.render(display_label, False, color_item)
+        _result_rects.append(item_s_hidden.get_rect(centerx=cx, centery=iy).inflate(40, 20))
 
-        if is_sel:
-            box = pygame.Rect(cx - item_w // 2 - 32, iy - item_h // 2 - 8,
-                              item_w + 64, item_h + 16)
-            pygame.draw.rect(screen, (25, 2, 14), box)
-            pygame.draw.rect(screen, C_ACCENT, box, 2)
+        if btn_alpha > 0:
+            item_s = _font_lg.render(display_label, False, color_item)
+            item_s.set_alpha(btn_alpha)
+            item_w = item_s.get_width()
+            item_h = item_s.get_height()
 
-        screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
-        _result_rects.append(item_s.get_rect(centerx=cx, centery=iy).inflate(40, 20))
+            if is_sel:
+                box_surf = pygame.Surface((item_w + 64, item_h + 16), pygame.SRCALPHA)
+                pygame.draw.rect(box_surf, (25, 2, 14, btn_alpha), box_surf.get_rect())
+                pygame.draw.rect(box_surf, (*C_ACCENT, btn_alpha), box_surf.get_rect(), 2)
+                screen.blit(box_surf, (cx - item_w // 2 - 32, iy - item_h // 2 - 8))
+
+            screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
 
 
 

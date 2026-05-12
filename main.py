@@ -517,6 +517,7 @@ def main() -> None:
             if game.state in (GameState.GAME_OVER, GameState.WIN):
                 audio.bgm_stop()
                 audio.heartbeat_stop()
+                ui.start_result_anim()
             elif game.state == GameState.MENU and _prev_state not in (
                     GameState.GRID_SELECT, GameState.OPTIONS):
                 audio.bgm_play_menu()
@@ -543,6 +544,7 @@ def main() -> None:
         ui.update_match_pulse()
         ui.update_screen_shake()
         ui.update_transition()
+        ui.update_result_anim(dt_ms)
         if game.state == GameState.PLAYING and game.cards:
             ui.update_preview(game.cards, dt_ms)
             audio.update_heartbeat(game.hp.current_hp, cfg.music_volume, cfg.master_volume)
