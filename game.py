@@ -34,13 +34,14 @@ GAME_OVER_DELAY_MS= 1000.0  # ms to wait after last mismatch flip back before sh
 
 class GameState(Enum):
     """Top-level states the game can be in."""
-    MENU        = auto()   # Main menu is visible
-    GRID_SELECT = auto()   # Selecting difficulty
-    PLAYING     = auto()   # Active gameplay
-    PAUSED      = auto()   # Game frozen — pause overlay visible
-    OPTIONS     = auto()   # Options menu visible
-    GAME_OVER   = auto()   # HP reached 0
-    WIN         = auto()   # All pairs matched
+    MENU           = auto()   # Main menu is visible
+    GRID_SELECT    = auto()   # Selecting difficulty
+    PLAYING        = auto()   # Active gameplay
+    PAUSED         = auto()   # Game frozen — pause overlay visible
+    OPTIONS        = auto()   # Options menu visible
+    POWERUP_SELECT = auto()   # Choosing a buff (Hard Mode only)
+    GAME_OVER      = auto()   # HP reached 0
+    WIN            = auto()   # All pairs matched
 
 
 class Difficulty(Enum):
@@ -116,6 +117,11 @@ class Game:
         self.score           : Score        = Score()
         self._turn_start_ticks: int         = 0      # pygame ticks when 1st card flipped
 
+        # --- Power-Ups (Hard Mode) ---
+        self.shield_charges  : int          = 0
+        self.lifesteal_active: bool         = False
+        self.has_extra_life  : bool         = False
+
     # ------------------------------------------------------------------
     # State transitions
     # ------------------------------------------------------------------
@@ -134,7 +140,7 @@ class Game:
         """
         self.difficulty      = difficulty
         self.cards           = cards
-        self.state           = GameState.PLAYING
+        self.state           = GameState.POWERUP_SELECT if difficulty == Difficulty.HARD else GameState.PLAYING
         self.flipped_cards.clear()
         self.lock_input      = False
         self.mismatch_timer  = 0.0
@@ -146,6 +152,11 @@ class Game:
         self.hp              = HPBar()
         self.score           = Score()
         self._turn_start_ticks = 0
+
+        # Reset power-ups
+        self.shield_charges  = 0
+        self.lifesteal_active = False
+        self.has_extra_life  = False
 
     def game_over(self) -> None:
         """Transition to the GAME_OVER screen."""
@@ -174,6 +185,9 @@ class Game:
         self.hp             = HPBar()
         self.score          = Score()
         self._turn_start_ticks = 0
+        self.shield_charges  = 0
+        self.lifesteal_active = False
+        self.has_extra_life  = False
 
     def to_pause(self) -> None:
         """Freeze gameplay and show the pause overlay."""
@@ -296,16 +310,25 @@ class Game:
                 self._win_pending = True
                 self._win_delay   = WIN_DELAY_MS
 
+            if self.lifesteal_active:
+                self.hp.heal(5)
+                print(f"[LIFESTEAL] Match found! +5 HP (Current: {self.hp.current_hp})")
+
             return "match"
 
         # Mismatch — lock input, deduct HP, reset streak, start countdown
-        self.hp.deduct(self.difficulty.hp_penalty)
+        if self.shield_charges > 0:
+            self.shield_charges -= 1
+            print(f"[SHIELD] Mismatch blocked! Charges remaining: {self.shield_charges}")
+        else:
+            self.hp.deduct(self.difficulty.hp_penalty)
+            print(
+                f"[MISMATCH] {a.rank} of {a.suit} vs {b.rank} of {b.suit}  "
+                f"HP: {self.hp.current_hp}/{HPBar.MAX_HP} (-{self.difficulty.hp_penalty})  "
+                f"streak reset"
+            )
+        
         self.score.reset_streak()
-        print(
-            f"[MISMATCH] {a.rank} of {a.suit} vs {b.rank} of {b.suit}  "
-            f"HP: {self.hp.current_hp}/{HPBar.MAX_HP} (-{self.difficulty.hp_penalty})  "
-            f"streak reset"
-        )
         self.lock_input     = True
         self.mismatch_timer = MISMATCH_DELAY_MS
         return "mismatch"
@@ -363,9 +386,14 @@ class Game:
 
         # --- Game-over check (Week 3) ---
         if self.hp.is_depleted:
-            print("[GAME OVER] HP depleted — waiting for flip back animation...")
-            self._game_over_pending = True
-            self._game_over_delay   = GAME_OVER_DELAY_MS
+            if self.has_extra_life:
+                self.has_extra_life = False
+                self.hp.heal(30)
+                print("[REVIVE] Extra Life consumed! HP restored to 30.")
+            else:
+                print("[GAME OVER] HP depleted — waiting for flip back animation...")
+                self._game_over_pending = True
+                self._game_over_delay   = GAME_OVER_DELAY_MS
 
         return mismatched
 

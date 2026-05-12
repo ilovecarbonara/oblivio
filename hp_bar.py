@@ -20,6 +20,10 @@ class HPBar:
         """Subtract *amount* HP, clamping at zero."""
         self.current_hp = max(0, self.current_hp - amount)
 
+    def heal(self, amount: int) -> None:
+        """Add *amount* HP, clamping at MAX_HP."""
+        self.current_hp = min(self.MAX_HP, self.current_hp + amount)
+
     @property
     def is_depleted(self) -> bool:
         """Return True when HP has reached zero."""
