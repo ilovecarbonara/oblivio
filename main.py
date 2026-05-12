@@ -169,7 +169,6 @@ def main() -> None:
     _prev_options_sel: int = options_selected
     _prev_hovered_card       = None   # tracks mouse-hover card changes in PLAYING
 
-    _grid_rects: list[pygame.Rect] = []
 
     running = True
     dt_ms   = 0.0          # milliseconds since last frame
@@ -208,8 +207,9 @@ def main() -> None:
                             audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
                             
                 elif game.state == GameState.GRID_SELECT:
-                    for i, r in enumerate(_grid_rects):
-                        if r.collidepoint(mx, my): grid_selected = i
+                    idx = ui.get_hovered_difficulty_item(mx, my)
+                    if idx is not None: grid_selected = idx
+
                 elif game.state in (GameState.GAME_OVER, GameState.WIN):
                     idx = ui.get_hovered_result_item(mx, my)
                     if idx is not None: result_selected = idx
@@ -466,7 +466,8 @@ def main() -> None:
                         valid_click = True
                     elif game.state == GameState.PAUSED and ui.get_hovered_pause_item(mx, my) is not None:
                         valid_click = True
-                    elif game.state == GameState.GRID_SELECT and any(r.collidepoint(mx, my) for r in _grid_rects):
+                    elif game.state == GameState.GRID_SELECT and ui.get_hovered_difficulty_item(mx, my) is not None:
+
                         valid_click = True
                     elif game.state in (GameState.GAME_OVER, GameState.WIN) and ui.get_hovered_result_item(mx, my) is not None:
                         valid_click = True
@@ -596,36 +597,8 @@ def main() -> None:
             ui.draw_options_menu(screen, cfg, options_selected, frame, options_origin)
 
         elif game.state == GameState.GRID_SELECT:
-            # [TEMP MOCKUP — JAY: Replace with full screen in Week 3]
-            ui.draw_game_bg(screen, frame // 4)
-            heading_font = ui.get_gothic_font(36)
-            item_font    = ui.get_gothic_font(24)
+            ui.draw_difficulty_select(screen, grid_selected, frame)
 
-            hd = heading_font.render("SELECT DIFFICULTY", False, (255, 255, 255))
-            screen.blit(hd, hd.get_rect(centerx=win_w // 2, centery=win_h // 2 - 120))
-
-            # Separator lines
-            sep_y = win_h // 2 - 75
-            pygame.draw.line(screen, (243, 2, 97), (win_w // 2 - 240, sep_y), (win_w // 2 + 240, sep_y), 2)
-
-            diffs = ["Easy  (4x4)", "Medium  (6x6)", "Hard  (8x8)", "Back"]
-            _grid_rects.clear()
-            for i, d in enumerate(diffs):
-                is_sel = (i == grid_selected)
-                color  = (243, 2, 97) if is_sel else (90, 70, 100)
-                label  = f"> {d} <" if is_sel else d
-                ds = item_font.render(label, False, color)
-                dy = win_h // 2 - 20 + i * 60
-                
-                box = pygame.Rect(win_w // 2 - ds.get_width() // 2 - 20,
-                                  dy - ds.get_height() // 2 - 8,
-                                  ds.get_width() + 40, ds.get_height() + 16)
-                _grid_rects.append(box)
-                
-                if is_sel:
-                    pygame.draw.rect(screen, (25, 2, 14), box)
-                    pygame.draw.rect(screen, (243, 2, 97), box, 2)
-                screen.blit(ds, ds.get_rect(centerx=win_w // 2, centery=dy))
 
         elif game.state in (GameState.GAME_OVER, GameState.WIN):
             ui.draw_result_screen(screen, game.state == GameState.WIN, game.score.total, result_selected, frame)
