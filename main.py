@@ -371,7 +371,10 @@ def main() -> None:
                                 game.start_game(_diff, _cards)
                                 cursor_pos = (0, 0)
                                 ui.start_preview(_cards)
-                                audio.bgm_play_game(_diff.label)
+                                if game.state == GameState.POWERUP_SELECT:
+                                    audio.bgm_play_menu()
+                                else:
+                                    audio.bgm_play_game(_diff.label)
                                 print(f"[INFO] Game started — difficulty: {_diff.label} ({_diff.cols}×{_diff.rows})")
                             ui.start_transition(_start_game_cb)
 
@@ -385,6 +388,7 @@ def main() -> None:
                         elif powerup_selected == 2: # EXTRA LIFE
                             game.has_extra_life = True
                         game.state = GameState.PLAYING
+                        audio.bgm_play_game(game.difficulty.label)
 
                     # --- Playing (SPACE only — flip card) ---
                     elif game.state == GameState.PLAYING and event.key == pygame.K_SPACE:
@@ -419,7 +423,10 @@ def main() -> None:
                                 ui.reset_hp()
                                 cursor_pos = (0, 0)
                                 ui.start_preview(_cards)
-                                audio.bgm_play_game(_diff_r.label)
+                                if game.state == GameState.POWERUP_SELECT:
+                                    audio.bgm_play_menu()
+                                else:
+                                    audio.bgm_play_game(_diff_r.label)
                                 print(f"[INFO] Restarted — difficulty: {_diff_r.label} ({_diff_r.cols}×{_diff_r.rows})")
                             ui.start_transition(_restart_cb)
                         elif pause_selected == 2:      # OPTIONS
@@ -459,7 +466,10 @@ def main() -> None:
                                 game.start_game(_diff_ga, _cards)
                                 cursor_pos = (0, 0)
                                 ui.start_preview(_cards)
-                                audio.bgm_play_game(_diff_ga.label)
+                                if game.state == GameState.POWERUP_SELECT:
+                                    audio.bgm_play_menu()
+                                else:
+                                    audio.bgm_play_game(_diff_ga.label)
                                 print(f"[INFO] Restarted — difficulty: {_diff_ga.label} ({_diff_ga.cols}×{_diff_ga.rows})")
                             ui.start_transition(_play_again_cb)
                         else:                          # MAIN MENU
