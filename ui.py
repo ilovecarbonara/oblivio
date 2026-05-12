@@ -756,7 +756,8 @@ def draw_card(
         screen.blit(fsurf, (bx, rect.y))
 
     # Hover highlight — dynamic pulsing magenta glow on face-down hoverable cards
-    if cid == _hovered_card_id and card.state == CardState.FACE_DOWN:
+    import settings as cfg
+    if cfg.input_method != 1 and cid == _hovered_card_id and card.state == CardState.FACE_DOWN:
         hr = pygame.Rect(bx, rect.y, dw, card_h)
         # Sine-wave pulse: completes a cycle every ~800ms
         t_pulse = (pygame.time.get_ticks() % 800) / 800.0
@@ -774,7 +775,7 @@ def draw_card(
         pygame.draw.rect(screen, C_ACCENT, hr, width=border_w, border_radius=3)
 
     # Keyboard cursor highlight — bright solid corner-bracket frame, animated dash
-    if _cursor_grid_pos is not None and card.grid_pos == _cursor_grid_pos:
+    if cfg.input_method != 2 and _cursor_grid_pos is not None and card.grid_pos == _cursor_grid_pos:
         t_dash = (pygame.time.get_ticks() % 600) / 600.0
         pulse2 = (math.sin(t_dash * 2 * math.pi) + 1) / 2   # 0->1
         # Solid bright-white inner border
@@ -1128,6 +1129,7 @@ _OPT_LABELS = [
     "MASTER VOLUME",
     "MUSIC VOLUME",
     "SFX VOLUME",
+    "INPUT METHOD",
     "",              # APPLY & BACK button row
 ]
 _options_rects: list[pygame.Rect] = []
@@ -1162,15 +1164,30 @@ def _draw_volume_bar(
     screen.blit(pct_surf, (x + width + 14, y + height // 2 - pct_surf.get_height() // 2))
 
 
+def get_display_mode_label(idx: int) -> str:
+    """Helper to get display mode label from index."""
+    import settings
+    idx = max(0, min(idx, len(settings.DISPLAY_MODES) - 1))
+    return settings.DISPLAY_MODES[idx]
+
+
+def get_resolution_label(idx: int) -> str:
+    """Helper to get resolution label from index."""
+    import settings
+    idx = max(0, min(idx, len(settings.RESOLUTIONS) - 1))
+    w, h = settings.RESOLUTIONS[idx]
+    return f"{w} x {h}"
+
+
 def draw_options_menu(
     screen: pygame.Surface,
-    settings,
+    opts:   dict,
     selected_row: int,
     frame: int,
     origin: str,
 ) -> None:
     """
-    Full-screen options menu.  ``settings`` is the settings module.
+    Full-screen options menu.  ``opts`` is a dictionary of current (potentially unsaved) values.
     ``origin`` is 'menu' or 'pause' — changes the back-button label.
     """
     global _options_rects
@@ -1210,13 +1227,13 @@ def draw_options_menu(
     label_x = cx - 280   # left-aligned labels
     value_x = cx + 40    # right-aligned values area
 
-    for row in range(6):
+    for row in range(7):
         is_sel = (row == selected_row)
         ry = row_y0 + row * row_spacing
         color = C_ACCENT if is_sel else C_DIM
 
-        # Row 5 is the APPLY & BACK button
-        if row == 5:
+        # Row 6 is the APPLY & BACK button
+        if row == 6:
             btn_label = "APPLY & BACK"
             if is_sel:
                 btn_label = f"> {btn_label} <"
@@ -1252,28 +1269,35 @@ def draw_options_menu(
 
         # Value display
         if row == 0:  # Display Mode
-            mode_label = settings.current_display_mode_label()
+            mode_label = get_display_mode_label(opts["display_mode"])
             val_str = f"< {mode_label} >"
             val_surf = value_font.render(val_str, False, color)
             screen.blit(val_surf, (value_x, ry - val_surf.get_height() // 2))
 
         elif row == 1:  # Resolution
-            res_w, res_h = settings.current_resolution()
-            val_str = f"< {res_w} x {res_h} >"
+            res_label = get_resolution_label(opts["resolution"])
+            val_str = f"< {res_label} >"
             val_surf = value_font.render(val_str, False, color)
             screen.blit(val_surf, (value_x, ry - val_surf.get_height() // 2))
 
         elif row == 2:  # Master Volume
             _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
-                             settings.master_volume, is_sel)
+                             opts["master_volume"], is_sel)
 
         elif row == 3:  # Music Volume
             _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
-                             settings.music_volume, is_sel)
+                             opts["music_volume"], is_sel)
 
         elif row == 4:  # SFX Volume
             _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
-                             settings.sfx_volume, is_sel)
+                             opts["sfx_volume"], is_sel)
+
+        elif row == 5:  # Input Method
+            import settings
+            method_label = settings.INPUT_METHODS[opts["input_method"]]
+            val_str = f"< {method_label} >"
+            val_surf = value_font.render(val_str, False, color)
+            screen.blit(val_surf, (value_x, ry - val_surf.get_height() // 2))
 
 
 

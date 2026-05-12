@@ -28,6 +28,8 @@ RESOLUTIONS: list[tuple[int, int]] = [
     (1920, 1200),   # 16:10
 ]
 
+INPUT_METHODS: list[str] = ["Keyboard & Mouse", "Keyboard", "Mouse"]
+
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
@@ -38,6 +40,7 @@ _DEFAULTS = {
     "master_volume": 1.0,   # 0.0 – 1.0
     "music_volume":  0.6,   # 0.0 – 1.0
     "sfx_volume":    1.0,   # 0.0 – 1.0
+    "input_method":  0,     # index into INPUT_METHODS (Both)
 }
 
 # ---------------------------------------------------------------------------
@@ -49,6 +52,7 @@ resolution:    int   = _DEFAULTS["resolution"]
 master_volume: float = _DEFAULTS["master_volume"]
 music_volume:  float = _DEFAULTS["music_volume"]
 sfx_volume:    float = _DEFAULTS["sfx_volume"]
+input_method:  int   = _DEFAULTS["input_method"]
 
 # ---------------------------------------------------------------------------
 # Derived helpers
@@ -86,7 +90,7 @@ def current_display_mode_label() -> str:
 
 def load() -> None:
     """Read settings.json and populate module-level variables."""
-    global display_mode, resolution, master_volume, music_volume, sfx_volume
+    global display_mode, resolution, master_volume, music_volume, sfx_volume, input_method
 
     if not os.path.exists(_SETTINGS_PATH):
         print("[SETTINGS] No settings.json found — creating from defaults.")
@@ -109,17 +113,20 @@ def load() -> None:
         master_volume = float(data.get("master_volume", _DEFAULTS["master_volume"]))
         music_volume  = float(data.get("music_volume",  _DEFAULTS["music_volume"]))
         sfx_volume    = float(data.get("sfx_volume",    _DEFAULTS["sfx_volume"]))
+        input_method  = int(data.get("input_method",    _DEFAULTS["input_method"]))
 
         # Clamp indices
         display_mode = max(0, min(display_mode, len(DISPLAY_MODES) - 1))
         resolution   = max(0, min(resolution,   len(RESOLUTIONS) - 1))
+        input_method = max(0, min(input_method, len(INPUT_METHODS) - 1))
         master_volume = max(0.0, min(1.0, master_volume))
         music_volume  = max(0.0, min(1.0, music_volume))
         sfx_volume    = max(0.0, min(1.0, sfx_volume))
 
         print(f"[SETTINGS] Loaded: mode={current_display_mode_label()}, "
               f"res={current_resolution()}, "
-              f"vol=master:{master_volume:.0%} music:{music_volume:.0%} sfx:{sfx_volume:.0%}")
+              f"vol=master:{master_volume:.0%} music:{music_volume:.0%} sfx:{sfx_volume:.0%}, "
+              f"input={INPUT_METHODS[input_method]}")
 
     except (json.JSONDecodeError, ValueError, TypeError) as exc:
         print(f"[SETTINGS] Corrupt settings.json — using defaults. ({exc})")
@@ -133,6 +140,7 @@ def save() -> None:
         "master_volume": round(master_volume, 2),
         "music_volume":  round(music_volume, 2),
         "sfx_volume":    round(sfx_volume, 2),
+        "input_method":  input_method,
     }
     try:
         with open(_SETTINGS_PATH, "w", encoding="utf-8") as f:
