@@ -148,6 +148,7 @@ def main() -> None:
     grid_selected   = 0        # 0=Easy  1=Medium  2=Hard
     result_selected = 0        # 0=Play Again  1=Main Menu
     pause_selected  = 0        # 0=Resume  1=Restart  2=Options
+    powerup_selected = 0       # 0=Revive  1=Shield  2=Regen
     options_selected = 0       # 0-5 (rows in options menu)
     options_origin  = "menu"   # "menu" or "pause" — where we came from
     frame           = 0
@@ -166,6 +167,7 @@ def main() -> None:
     _prev_menu_sel:    int = menu_selected
     _prev_grid_sel:    int = grid_selected
     _prev_pause_sel:   int = pause_selected
+    _prev_powerup_sel: int = powerup_selected
     _prev_options_sel: int = options_selected
     _prev_hovered_card       = None   # tracks mouse-hover card changes in PLAYING
 
@@ -213,6 +215,10 @@ def main() -> None:
                 elif game.state in (GameState.GAME_OVER, GameState.WIN):
                     idx = ui.get_hovered_result_item(mx, my)
                     if idx is not None: result_selected = idx
+                
+                elif game.state == GameState.POWERUP_SELECT:
+                    idx = ui.get_hovered_powerup_item(mx, my)
+                    if idx is not None: powerup_selected = idx
 
             elif event.type == pygame.KEYDOWN:
 
@@ -271,6 +277,8 @@ def main() -> None:
                         result_selected = (result_selected - 1) % 2
                     elif game.state == GameState.PAUSED:
                         pause_selected = (pause_selected - 1) % len(ui.PAUSE_ITEMS)
+                    elif game.state == GameState.POWERUP_SELECT:
+                        powerup_selected = (powerup_selected - 1) % 3
                     elif game.state == GameState.OPTIONS:
                         options_selected = (options_selected - 1) % _OPTIONS_ROW_COUNT
 
@@ -292,6 +300,8 @@ def main() -> None:
                         result_selected = (result_selected + 1) % 2
                     elif game.state == GameState.PAUSED:
                         pause_selected = (pause_selected + 1) % len(ui.PAUSE_ITEMS)
+                    elif game.state == GameState.POWERUP_SELECT:
+                        powerup_selected = (powerup_selected + 1) % 3
                     elif game.state == GameState.OPTIONS:
                         options_selected = (options_selected + 1) % _OPTIONS_ROW_COUNT
 
@@ -364,6 +374,17 @@ def main() -> None:
                                 audio.bgm_play_game(_diff.label)
                                 print(f"[INFO] Game started — difficulty: {_diff.label} ({_diff.cols}×{_diff.rows})")
                             ui.start_transition(_start_game_cb)
+
+                    # --- Powerup Select ---
+                    elif game.state == GameState.POWERUP_SELECT:
+                        audio.sfx_flip()
+                        if powerup_selected == 0: # SHIELD
+                            game.shield_charges = 2
+                        elif powerup_selected == 1: # REGEN
+                            game.regen_active = True
+                        elif powerup_selected == 2: # EXTRA LIFE
+                            game.has_extra_life = True
+                        game.state = GameState.PLAYING
 
                     # --- Playing (SPACE only — flip card) ---
                     elif game.state == GameState.PLAYING and event.key == pygame.K_SPACE:
@@ -471,6 +492,8 @@ def main() -> None:
                         valid_click = True
                     elif game.state in (GameState.GAME_OVER, GameState.WIN) and ui.get_hovered_result_item(mx, my) is not None:
                         valid_click = True
+                    elif game.state == GameState.POWERUP_SELECT and ui.get_hovered_powerup_item(mx, my) is not None:
+                        valid_click = True
                         
                     if valid_click:
                         pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
@@ -537,6 +560,9 @@ def main() -> None:
         elif game.state == GameState.OPTIONS and options_selected != _prev_options_sel:
             audio.sfx_hover()
             _prev_options_sel = options_selected
+        elif game.state == GameState.POWERUP_SELECT and powerup_selected != _prev_powerup_sel:
+            audio.sfx_hover()
+            _prev_powerup_sel = powerup_selected
 
         # -------------------------------------------------- animation ticks
         ui.update_flips()
@@ -558,7 +584,8 @@ def main() -> None:
 
         elif game.state == GameState.PLAYING:
             ui.draw_game_bg(screen, frame // 4)   # slow spin behind cards
-            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
+            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame,
+                        game.shield_charges, game.regen_active, game.has_extra_life)
             ui.draw_danger_vignette(screen, game.hp.current_hp, frame)
 
             # Hover detection — find which face-down card the mouse is over
@@ -589,7 +616,8 @@ def main() -> None:
         elif game.state == GameState.PAUSED:
             # Draw the frozen game underneath
             ui.draw_game_bg(screen, frame // 4)
-            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
+            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame,
+                        game.shield_charges, game.regen_active, game.has_extra_life)
             ui.set_hovered(None)
             ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, game.score.decay_fraction, cursor_pos)
             # Pause overlay on top
@@ -600,6 +628,9 @@ def main() -> None:
 
         elif game.state == GameState.GRID_SELECT:
             ui.draw_difficulty_select(screen, grid_selected, frame)
+
+        elif game.state == GameState.POWERUP_SELECT:
+            ui.draw_powerup_select(screen, powerup_selected, frame)
 
 
         elif game.state in (GameState.GAME_OVER, GameState.WIN):

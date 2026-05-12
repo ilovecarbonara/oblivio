@@ -31,6 +31,7 @@ _HERE      = os.path.dirname(__file__)
 _BASE      = os.path.join(_HERE, "game-assets", "sprites")
 _CARDS_PNG = os.path.join(_BASE, "CARDS", "FantasyCards", "FantasyCards.png")
 _CARD_BACK = os.path.join(_BASE, "CARDS", "FantasyCards", "Backsides", "DefaultFantasy.png")
+_JOKERS_PNG = os.path.join(_BASE, "CARDS", "FantasyCards", "FantasyJokers.png")
 _HEALTH_PX = os.path.join(_BASE, "HEALTH", "Pixelated")   # new pixelated bar
 
 # ---------------------------------------------------------------------------
@@ -239,6 +240,7 @@ _RANKS      = ("A","2","3","4","5","6","7","8","9","10","J","Q","K")
 _SUIT_ROW   = {"Spades": 0, "Clubs": 1, "Diamonds": 2, "Hearts": 3}
 
 _card_sprites: dict[str, pygame.Surface] = {}
+_joker_sprites: list[pygame.Surface] = []
 _card_back: pygame.Surface | None = None
 
 
@@ -259,6 +261,15 @@ def load_card_sprites() -> None:
         
     if os.path.exists(_CARD_BACK):
         _card_back = pygame.image.load(_CARD_BACK).convert_alpha()
+
+    _joker_sprites.clear()
+    if os.path.exists(_JOKERS_PNG):
+        sheet = pygame.image.load(_JOKERS_PNG).convert_alpha()
+        # 3 jokers: 23x35 with 1px gap (71x35 sheet)
+        for i in range(3):
+            x = i * 24
+            surf = sheet.subsurface(pygame.Rect(x, 0, 23, 35))
+            _joker_sprites.append(surf.copy())
 
 
 def get_card_surf(suit: str, rank: str) -> pygame.Surface | None:
@@ -902,7 +913,6 @@ def _draw_floating_texts(screen: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 # HUD strip  —  pixelated slanted health bar + score
 # ---------------------------------------------------------------------------
-
 def draw_hud(
     screen: pygame.Surface,
     hp:     float,
@@ -910,6 +920,9 @@ def draw_hud(
     multiplier: float,
     hud_h:  int,
     frame:  int,
+    shield_charges: int = 0,
+    regen_active: bool = False,
+    has_extra_life: bool = False,
 ) -> None:
     global _prev_score, _score_juice
 
@@ -949,6 +962,35 @@ def draw_hud(
     hp_int     = max(0, int(round(_hp_drawn)))
     hp_surf    = label_font.render(f"{hp_int}/100 HP", False, C_DIM)
     screen.blit(hp_surf, (bar_x, bar_top_y - hp_surf.get_height() - 2))
+
+    # ── Power Up Indicators ──────────────────────────────────────────────────
+    px = bar_x + bar_display_w + 30
+    py = bar_top_y
+    icon_spacing = 40
+    
+    # Simple icons using the Joker sprites scaled down or just text for now
+    if shield_charges > 0:
+        # Draw small shield icon (Blue Joker)
+        s_icon = pygame.transform.scale(_joker_sprites[1], (14, 21)) if len(_joker_sprites) > 1 else None
+        if s_icon: screen.blit(s_icon, (px, py - 4))
+        sh_text = label_font.render(f"x{shield_charges}", False, (100, 180, 255))
+        screen.blit(sh_text, (px + 18, py))
+        px += icon_spacing + 10
+        
+    if regen_active:
+        # Draw small regen icon (Green Joker)
+        r_icon = pygame.transform.scale(_joker_sprites[2], (14, 21)) if len(_joker_sprites) > 2 else None
+        if r_icon: screen.blit(r_icon, (px, py - 4))
+        rg_text = label_font.render("Regen", False, (100, 255, 100))
+        screen.blit(rg_text, (px + 18, py))
+        px += icon_spacing + 20
+
+    if has_extra_life:
+        # Draw small revive icon (Red Joker)
+        v_icon = pygame.transform.scale(_joker_sprites[0], (14, 21)) if len(_joker_sprites) > 0 else None
+        if v_icon: screen.blit(v_icon, (px, py - 4))
+        rv_text = label_font.render("Revive", False, (255, 100, 100))
+        screen.blit(rv_text, (px + 18, py))
 
 
     # ── Scoreboard (Gothic Housing + Juice) ─────────────────────────────────
@@ -1481,8 +1523,84 @@ def get_hovered_difficulty_item(mx: int, my: int) -> int | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Power-Up Selection (Hard Mode only)
+# ---------------------------------------------------------------------------
+_powerup_rects: list[pygame.Rect] = []
+
+def draw_powerup_select(screen: pygame.Surface, selected: int, frame: int) -> None:
+    """
+    Pick your Power-Up screen at the start of a Hard Mode game.
+    """
+    global _powerup_rects
+    _powerup_rects.clear()
+
+    c = get_canvas()
+    draw_creepy_void(c, frame)
+    blit_canvas_to_screen(screen)
+
+    if _font_title is None or _font_lg is None or _font_sm is None:
+        return
+
+    w = screen.get_width()
+    h = screen.get_height()
+    cx = w // 2
+
+    # Title
+    title_font = get_gothic_font(48)
+    title_surf = title_font.render("CHOOSE YOUR POWER-UP", False, C_WHITE)
+    shadow_surf = title_font.render("CHOOSE YOUR POWER-UP", False, C_ACCENT_DK)
+    title_rect = title_surf.get_rect(centerx=cx, centery=100)
+    screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
+    screen.blit(title_surf, title_rect)
+
+    # Options: (Name, Description, Color, SpriteIndex)
+    options = [
+        ("SHIELD",     "Block 2 mismatches.", (100, 180, 255), 1),
+        ("REGEN",      "Heal 5 HP per match.", (100, 255, 100), 2),
+        ("EXTRA LIFE", "Revive at 30 HP once.", (255, 100, 100), 0),
+    ]
+
+    item_x_start = cx - 300
+    item_spacing = 300
+    
+    for i, (name, desc, color, spr_idx) in enumerate(options):
+        is_sel = (i == selected)
+        ix = item_x_start + i * item_spacing
+        iy = h // 2 + 20
+        
+        # Draw Joker Sprite
+        if i < len(_joker_sprites):
+            spr = pygame.transform.scale(_joker_sprites[i], (92, 140))
+            spr_rect = spr.get_rect(centerx=ix, centery=iy - 60)
+            
+            # Hover effect / Selection box
+            if is_sel:
+                glow_rect = spr_rect.inflate(20, 20)
+                pygame.draw.rect(screen, (40, 5, 25), glow_rect, border_radius=8)
+                pygame.draw.rect(screen, C_ACCENT, glow_rect, 2, border_radius=8)
+                # Subtle bounce
+                spr_rect.y -= int(5 * math.sin(frame * 0.1))
+            
+            screen.blit(spr, spr_rect)
+            _powerup_rects.append(spr_rect.inflate(40, 200)) # wide hit area
+
+        # Text
+        name_s = _font_lg.render(name, False, C_ACCENT if is_sel else C_DIM)
+        screen.blit(name_s, name_s.get_rect(centerx=ix, centery=iy + 60))
+        
+        desc_s = _font_sm.render(desc, False, C_WHITE if is_sel else C_DIM)
+        screen.blit(desc_s, desc_s.get_rect(centerx=ix, centery=iy + 95))
+
+def get_hovered_powerup_item(mx: int, my: int) -> int | None:
+    for i, r in enumerate(_powerup_rects):
+        if r.collidepoint(mx, my): return i
+    return None
+
+
 def get_options_rect(row: int) -> pygame.Rect | None:
     if 0 <= row < len(_options_rects):
         return _options_rects[row]
     return None
+
 
