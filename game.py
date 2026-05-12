@@ -119,7 +119,7 @@ class Game:
 
         # --- Power-Ups (Hard Mode) ---
         self.shield_charges  : int          = 0
-        self.regen_active    : bool         = False
+        self.lifesteal_active: bool         = False
         self.has_extra_life  : bool         = False
 
     # ------------------------------------------------------------------
@@ -155,7 +155,7 @@ class Game:
 
         # Reset power-ups
         self.shield_charges  = 0
-        self.regen_active    = False
+        self.lifesteal_active = False
         self.has_extra_life  = False
 
     def game_over(self) -> None:
@@ -186,7 +186,7 @@ class Game:
         self.score          = Score()
         self._turn_start_ticks = 0
         self.shield_charges  = 0
-        self.regen_active    = False
+        self.lifesteal_active = False
         self.has_extra_life  = False
 
     def to_pause(self) -> None:
@@ -310,9 +310,9 @@ class Game:
                 self._win_pending = True
                 self._win_delay   = WIN_DELAY_MS
 
-            if self.regen_active:
+            if self.lifesteal_active:
                 self.hp.heal(5)
-                print(f"[REGEN] Match found! +5 HP (Current: {self.hp.current_hp})")
+                print(f"[LIFESTEAL] Match found! +5 HP (Current: {self.hp.current_hp})")
 
             return "match"
 

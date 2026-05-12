@@ -921,7 +921,7 @@ def draw_hud(
     hud_h:  int,
     frame:  int,
     shield_charges: int = 0,
-    regen_active: bool = False,
+    lifesteal_active: bool = False,
     has_extra_life: bool = False,
 ) -> None:
     global _prev_score, _score_juice
@@ -970,24 +970,24 @@ def draw_hud(
     
     # Simple icons using the Joker sprites scaled down or just text for now
     if shield_charges > 0:
-        # Draw small shield icon (Blue Joker)
-        s_icon = pygame.transform.scale(_joker_sprites[1], (14, 21)) if len(_joker_sprites) > 1 else None
+        # Draw small shield icon (Joker 0)
+        s_icon = pygame.transform.scale(_joker_sprites[0], (14, 21)) if len(_joker_sprites) > 0 else None
         if s_icon: screen.blit(s_icon, (px, py - 4))
         sh_text = label_font.render(f"x{shield_charges}", False, (100, 180, 255))
         screen.blit(sh_text, (px + 18, py))
         px += icon_spacing + 10
         
-    if regen_active:
-        # Draw small regen icon (Green Joker)
-        r_icon = pygame.transform.scale(_joker_sprites[2], (14, 21)) if len(_joker_sprites) > 2 else None
+    if lifesteal_active:
+        # Draw small lifesteal icon (Joker 1)
+        r_icon = pygame.transform.scale(_joker_sprites[1], (14, 21)) if len(_joker_sprites) > 1 else None
         if r_icon: screen.blit(r_icon, (px, py - 4))
-        rg_text = label_font.render("Regen", False, (100, 255, 100))
+        rg_text = label_font.render("Lifesteal", False, (100, 255, 100))
         screen.blit(rg_text, (px + 18, py))
         px += icon_spacing + 20
 
     if has_extra_life:
-        # Draw small revive icon (Red Joker)
-        v_icon = pygame.transform.scale(_joker_sprites[0], (14, 21)) if len(_joker_sprites) > 0 else None
+        # Draw small revive icon (Joker 2)
+        v_icon = pygame.transform.scale(_joker_sprites[2], (14, 21)) if len(_joker_sprites) > 2 else None
         if v_icon: screen.blit(v_icon, (px, py - 4))
         rv_text = label_font.render("Revive", False, (255, 100, 100))
         screen.blit(rv_text, (px + 18, py))
@@ -1545,52 +1545,61 @@ def draw_powerup_select(screen: pygame.Surface, selected: int, frame: int) -> No
     w = screen.get_width()
     h = screen.get_height()
     cx = w // 2
+    
+    # Scale factor based on 1920x1080 baseline
+    sc = w / 1920.0
 
     # Title
-    title_font = get_gothic_font(48)
+    title_font = get_gothic_font(int(48 * sc))
     title_surf = title_font.render("CHOOSE YOUR POWER-UP", False, C_WHITE)
     shadow_surf = title_font.render("CHOOSE YOUR POWER-UP", False, C_ACCENT_DK)
-    title_rect = title_surf.get_rect(centerx=cx, centery=100)
-    screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
+    title_rect = title_surf.get_rect(centerx=cx, centery=int(100 * sc))
+    screen.blit(shadow_surf, (title_rect.x + int(3 * sc), title_rect.y + int(3 * sc)))
     screen.blit(title_surf, title_rect)
 
     # Options: (Name, Description, Color, SpriteIndex)
     options = [
-        ("SHIELD",     "Block 2 mismatches.", (100, 180, 255), 1),
-        ("REGEN",      "Heal 5 HP per match.", (100, 255, 100), 2),
-        ("EXTRA LIFE", "Revive at 30 HP once.", (255, 100, 100), 0),
+        ("SHIELD",     "Block 2 mismatches.", (100, 180, 255), 0),
+        ("LIFESTEAL",  "Heal 5 HP per match.", (100, 255, 100), 1),
+        ("EXTRA LIFE", "Revive at 30 HP once.", (255, 100, 100), 2),
     ]
 
-    item_x_start = cx - 300
-    item_spacing = 300
+    item_spacing = int(500 * sc)
+    item_x_start = cx - item_spacing
+    
+    # Card and Font scaling
+    card_w = int(276 * sc)
+    card_h = int(420 * sc)
+    name_font = get_gothic_font(int(36 * sc))
+    desc_font = get_gothic_font(int(22 * sc))
     
     for i, (name, desc, color, spr_idx) in enumerate(options):
         is_sel = (i == selected)
         ix = item_x_start + i * item_spacing
-        iy = h // 2 + 20
+        iy = h // 2 + int(140 * sc)
         
-        # Draw Joker Sprite
-        if i < len(_joker_sprites):
-            spr = pygame.transform.scale(_joker_sprites[i], (92, 140))
-            spr_rect = spr.get_rect(centerx=ix, centery=iy - 60)
+        # Draw Joker Sprite (Responsive Size)
+        if spr_idx < len(_joker_sprites):
+            spr = pygame.transform.scale(_joker_sprites[spr_idx], (card_w, card_h))
+            spr_rect = spr.get_rect(centerx=ix, centery=iy - int(200 * sc))
             
             # Hover effect / Selection box
             if is_sel:
-                glow_rect = spr_rect.inflate(20, 20)
-                pygame.draw.rect(screen, (40, 5, 25), glow_rect, border_radius=8)
-                pygame.draw.rect(screen, C_ACCENT, glow_rect, 2, border_radius=8)
+                glow_rect = spr_rect.inflate(int(20 * sc), int(20 * sc))
+                pygame.draw.rect(screen, (40, 5, 25), glow_rect, border_radius=int(8 * sc))
+                pygame.draw.rect(screen, C_ACCENT, glow_rect, 2, border_radius=int(8 * sc))
                 # Subtle bounce
                 spr_rect.y -= int(5 * math.sin(frame * 0.1))
             
             screen.blit(spr, spr_rect)
-            _powerup_rects.append(spr_rect.inflate(40, 200)) # wide hit area
+            _powerup_rects.append(spr_rect.inflate(int(20 * sc), int(100 * sc))) # hit area
 
         # Text
-        name_s = _font_lg.render(name, False, C_ACCENT if is_sel else C_DIM)
-        screen.blit(name_s, name_s.get_rect(centerx=ix, centery=iy + 60))
+        name_s = name_font.render(name, False, C_ACCENT if is_sel else C_DIM)
+        screen.blit(name_s, name_s.get_rect(centerx=ix, centery=iy + int(80 * sc)))
         
-        desc_s = _font_sm.render(desc, False, C_WHITE if is_sel else C_DIM)
-        screen.blit(desc_s, desc_s.get_rect(centerx=ix, centery=iy + 95))
+        desc_s = desc_font.render(desc, False, C_WHITE if is_sel else C_DIM)
+        screen.blit(desc_s, desc_s.get_rect(centerx=ix, centery=iy + int(120 * sc)))
 
 def get_hovered_powerup_item(mx: int, my: int) -> int | None:
     for i, r in enumerate(_powerup_rects):

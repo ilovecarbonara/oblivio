@@ -148,7 +148,7 @@ def main() -> None:
     grid_selected   = 0        # 0=Easy  1=Medium  2=Hard
     result_selected = 0        # 0=Play Again  1=Main Menu
     pause_selected  = 0        # 0=Resume  1=Restart  2=Options
-    powerup_selected = 0       # 0=Revive  1=Shield  2=Regen
+    powerup_selected = 0       # 0=Shield  1=Lifesteal  2=Revive
     options_selected = 0       # 0-5 (rows in options menu)
     options_origin  = "menu"   # "menu" or "pause" — where we came from
     frame           = 0
@@ -380,8 +380,8 @@ def main() -> None:
                         audio.sfx_flip()
                         if powerup_selected == 0: # SHIELD
                             game.shield_charges = 2
-                        elif powerup_selected == 1: # REGEN
-                            game.regen_active = True
+                        elif powerup_selected == 1: # LIFESTEAL
+                            game.lifesteal_active = True
                         elif powerup_selected == 2: # EXTRA LIFE
                             game.has_extra_life = True
                         game.state = GameState.PLAYING
@@ -585,7 +585,7 @@ def main() -> None:
         elif game.state == GameState.PLAYING:
             ui.draw_game_bg(screen, frame // 4)   # slow spin behind cards
             ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame,
-                        game.shield_charges, game.regen_active, game.has_extra_life)
+                        game.shield_charges, game.lifesteal_active, game.has_extra_life)
             ui.draw_danger_vignette(screen, game.hp.current_hp, frame)
 
             # Hover detection — find which face-down card the mouse is over
@@ -617,7 +617,7 @@ def main() -> None:
             # Draw the frozen game underneath
             ui.draw_game_bg(screen, frame // 4)
             ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame,
-                        game.shield_charges, game.regen_active, game.has_extra_life)
+                        game.shield_charges, game.lifesteal_active, game.has_extra_life)
             ui.set_hovered(None)
             ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, game.score.decay_fraction, cursor_pos)
             # Pause overlay on top
