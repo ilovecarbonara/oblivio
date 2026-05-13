@@ -292,8 +292,6 @@ def main() -> None:
                         result_selected = (result_selected - 1) % 2
                     elif game.state == GameState.PAUSED:
                         pause_selected = (pause_selected - 1) % len(ui.PAUSE_ITEMS)
-                    elif game.state == GameState.POWERUP_SELECT:
-                        powerup_selected = (powerup_selected - 1) % 3
                     elif game.state == GameState.OPTIONS:
                         options_selected = (options_selected - 1) % _OPTIONS_ROW_COUNT
 
@@ -315,8 +313,6 @@ def main() -> None:
                         result_selected = (result_selected + 1) % 2
                     elif game.state == GameState.PAUSED:
                         pause_selected = (pause_selected + 1) % len(ui.PAUSE_ITEMS)
-                    elif game.state == GameState.POWERUP_SELECT:
-                        powerup_selected = (powerup_selected + 1) % 3
                     elif game.state == GameState.OPTIONS:
                         options_selected = (options_selected + 1) % _OPTIONS_ROW_COUNT
 
@@ -330,6 +326,8 @@ def main() -> None:
                         if new_pos != cursor_pos:
                             audio.sfx_cursor()
                         cursor_pos = new_pos
+                    elif game.state == GameState.POWERUP_SELECT:
+                        powerup_selected = (powerup_selected - 1) % 3
                     elif game.state == GameState.OPTIONS:
                         _options_adjust(options_selected, -1, options_data)
 
@@ -343,6 +341,8 @@ def main() -> None:
                         if new_pos != cursor_pos:
                             audio.sfx_cursor()
                         cursor_pos = new_pos
+                    elif game.state == GameState.POWERUP_SELECT:
+                        powerup_selected = (powerup_selected + 1) % 3
                     elif game.state == GameState.OPTIONS:
                         _options_adjust(options_selected, +1, options_data)
 
