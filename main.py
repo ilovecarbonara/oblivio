@@ -214,7 +214,7 @@ def main() -> None:
                     idx = ui.get_hovered_difficulty_item(mx, my)
                     if idx is not None: grid_selected = idx
 
-                elif game.state in (GameState.GAME_OVER, GameState.WIN):
+                elif game.state == GameState.GAME_OVER:
                     idx = ui.get_hovered_result_item(mx, my)
                     if idx is not None: result_selected = idx
                 
@@ -242,11 +242,14 @@ def main() -> None:
                         game.resume()
                     elif game.state == GameState.OPTIONS:
                         audio.sfx_cancel()
-                        screen = cfg.apply_display(screen)
-                        win_w, win_h = screen.get_size()
-                        if game.cards:
-                            current_cw, current_ch = _reposition_grid(game, current_cw, current_ch, win_w, win_h)
-                        game.from_options()
+                        def _from_options_esc_cb():
+                            nonlocal screen, win_w, win_h, current_cw, current_ch
+                            screen = cfg.apply_display(screen)
+                            win_w, win_h = screen.get_size()
+                            if game.cards:
+                                current_cw, current_ch = _reposition_grid(game, current_cw, current_ch, win_w, win_h)
+                            game.from_options()
+                        ui.start_transition(_from_options_esc_cb)
                     elif game.state == GameState.GRID_SELECT:
                         audio.sfx_cancel()
                         def _to_menu_cb():
@@ -260,7 +263,7 @@ def main() -> None:
                             cursor_pos = None
                             audio.bgm_play_menu()
                         ui.start_transition(_to_menu_cb)
-                    elif game.state in (GameState.GAME_OVER, GameState.WIN):
+                    elif game.state == GameState.GAME_OVER:
                         audio.sfx_cancel()
                         def _to_menu_cb():
                             nonlocal cursor_pos
@@ -285,7 +288,7 @@ def main() -> None:
                         if new_pos != cursor_pos:
                             audio.sfx_cursor()
                         cursor_pos = new_pos
-                    elif game.state in (GameState.GAME_OVER, GameState.WIN):
+                    elif game.state == GameState.GAME_OVER:
                         result_selected = (result_selected - 1) % 2
                     elif game.state == GameState.PAUSED:
                         pause_selected = (pause_selected - 1) % len(ui.PAUSE_ITEMS)
@@ -308,7 +311,7 @@ def main() -> None:
                         if new_pos != cursor_pos:
                             audio.sfx_cursor()
                         cursor_pos = new_pos
-                    elif game.state in (GameState.GAME_OVER, GameState.WIN):
+                    elif game.state == GameState.GAME_OVER:
                         result_selected = (result_selected + 1) % 2
                     elif game.state == GameState.PAUSED:
                         pause_selected = (pause_selected + 1) % len(ui.PAUSE_ITEMS)
@@ -359,22 +362,28 @@ def main() -> None:
                 if game.state == GameState.MENU and not ui.is_transition_active():
                     if menu_selected == 0:         # PLAY
                         audio.sfx_select()
-                        game.to_grid_select()
-                        grid_selected = 0
+                        def _to_grid_select_cb():
+                            nonlocal grid_selected
+                            game.to_grid_select()
+                            grid_selected = 0
+                        ui.start_transition(_to_grid_select_cb)
                     elif menu_selected == 1:       # OPTIONS
                         audio.sfx_select()
-                        options_origin = "menu"
-                        options_selected = 0
-                        # Sync temp scratchpad with current configuration
-                        options_data.update({
-                            "display_mode":  cfg.display_mode,
-                            "resolution":    cfg.resolution,
-                            "master_volume": cfg.master_volume,
-                            "music_volume":  cfg.music_volume,
-                            "sfx_volume":    cfg.sfx_volume,
-                            "input_method":  cfg.input_method,
-                        })
-                        game.to_options(GameState.MENU)
+                        def _to_options_cb():
+                            nonlocal options_origin, options_selected
+                            options_origin = "menu"
+                            options_selected = 0
+                            # Sync temp scratchpad with current configuration
+                            options_data.update({
+                                "display_mode":  cfg.display_mode,
+                                "resolution":    cfg.resolution,
+                                "master_volume": cfg.master_volume,
+                                "music_volume":  cfg.music_volume,
+                                "sfx_volume":    cfg.sfx_volume,
+                                "input_method":  cfg.input_method,
+                            })
+                            game.to_options(GameState.MENU)
+                        ui.start_transition(_to_options_cb)
                     elif menu_selected == 2:       # QUIT
                         audio.sfx_select()
                         running = False
@@ -460,18 +469,21 @@ def main() -> None:
                         ui.start_transition(_restart_cb)
                     elif pause_selected == 2:      # OPTIONS
                         audio.sfx_select()
-                        options_origin = "pause"
-                        options_selected = 0
-                        # Sync temp scratchpad with current configuration
-                        options_data.update({
-                            "display_mode":  cfg.display_mode,
-                            "resolution":    cfg.resolution,
-                            "master_volume": cfg.master_volume,
-                            "music_volume":  cfg.music_volume,
-                            "sfx_volume":    cfg.sfx_volume,
-                            "input_method":  cfg.input_method,
-                        })
-                        game.to_options(GameState.PAUSED)
+                        def _pause_to_options_cb():
+                            nonlocal options_origin, options_selected
+                            options_origin = "pause"
+                            options_selected = 0
+                            # Sync temp scratchpad with current configuration
+                            options_data.update({
+                                "display_mode":  cfg.display_mode,
+                                "resolution":    cfg.resolution,
+                                "master_volume": cfg.master_volume,
+                                "music_volume":  cfg.music_volume,
+                                "sfx_volume":    cfg.sfx_volume,
+                                "input_method":  cfg.input_method,
+                            })
+                            game.to_options(GameState.PAUSED)
+                        ui.start_transition(_pause_to_options_cb)
                     elif pause_selected == 3:      # QUIT
                         audio.sfx_cancel()
                         def _quit_cb():
@@ -482,29 +494,32 @@ def main() -> None:
                         ui.start_transition(_quit_cb)
 
                 # --- Options ---
-                elif game.state == GameState.OPTIONS:
+                elif game.state == GameState.OPTIONS and not ui.is_transition_active():
                     if options_selected == 6:      # APPLY & BACK
                         audio.sfx_select()
-                        # Apply temporary changes to persistent settings
-                        cfg.display_mode  = options_data["display_mode"]
-                        cfg.resolution    = options_data["resolution"]
-                        cfg.master_volume = options_data["master_volume"]
-                        cfg.music_volume  = options_data["music_volume"]
-                        cfg.sfx_volume    = options_data["sfx_volume"]
-                        cfg.input_method  = options_data["input_method"]
-                        
-                        cfg.save()
-                        screen = cfg.apply_display(screen)
-                        win_w, win_h = screen.get_size()
-                        cfg.apply_audio()
-                        audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
+                        def _apply_and_back_cb():
+                            nonlocal screen, win_w, win_h, current_cw, current_ch
+                            # Apply temporary changes to persistent settings
+                            cfg.display_mode  = options_data["display_mode"]
+                            cfg.resolution    = options_data["resolution"]
+                            cfg.master_volume = options_data["master_volume"]
+                            cfg.music_volume  = options_data["music_volume"]
+                            cfg.sfx_volume    = options_data["sfx_volume"]
+                            cfg.input_method  = options_data["input_method"]
+                            
+                            cfg.save()
+                            screen = cfg.apply_display(screen)
+                            win_w, win_h = screen.get_size()
+                            cfg.apply_audio()
+                            audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
 
-                        if game.cards:
-                            current_cw, current_ch = _reposition_grid(game, current_cw, current_ch, win_w, win_h)
-                        game.from_options()
+                            if game.cards:
+                                current_cw, current_ch = _reposition_grid(game, current_cw, current_ch, win_w, win_h)
+                            game.from_options()
+                        ui.start_transition(_apply_and_back_cb)
 
-                # --- Game Over / Win ---
-                elif game.state in (GameState.GAME_OVER, GameState.WIN) and not ui.is_transition_active():
+                # --- Game Over ---
+                elif game.state == GameState.GAME_OVER and not ui.is_transition_active():
                     if result_selected == 0:       # PLAY AGAIN
                         audio.sfx_select()
                         _diff_ga = game.difficulty
@@ -551,7 +566,7 @@ def main() -> None:
                     elif game.state == GameState.GRID_SELECT and ui.get_hovered_difficulty_item(mx, my) is not None:
 
                         valid_click = True
-                    elif game.state in (GameState.GAME_OVER, GameState.WIN) and ui.get_hovered_result_item(mx, my) is not None:
+                    elif game.state == GameState.GAME_OVER and ui.get_hovered_result_item(mx, my) is not None:
                         valid_click = True
                     elif game.state == GameState.POWERUP_SELECT and ui.get_hovered_powerup_item(mx, my) is not None:
                         valid_click = True
@@ -593,9 +608,20 @@ def main() -> None:
             for c in mismatched:
                 ui.start_flip(c)
 
-        # Detect transition to GAME_OVER or WIN — stop BGM + heartbeat
+        # Detect state transitions
         if game.state != _prev_state:
-            if game.state in (GameState.GAME_OVER, GameState.WIN):
+            # NEXT_ROUND: immediately generate a fresh board and continue playing
+            if game.state == GameState.NEXT_ROUND:
+                _diff_nr = game.difficulty
+                _cw, _ch, _origin = get_grid_layout(_diff_nr, win_w, win_h)
+                current_cw, current_ch = _cw, _ch
+                _new_cards = grid.generate_grid(_diff_nr, _cw, _ch, PADDING, _origin)
+                game.advance_round(_new_cards)
+                cursor_pos = (0, 0)
+                ui.start_preview(_new_cards)
+                ui.reset_hp()
+                # Keep current BGM playing — no audio change needed
+            elif game.state == GameState.GAME_OVER:
                 audio.bgm_play_menu()
                 audio.heartbeat_stop()
                 ui.start_result_anim()
@@ -621,7 +647,7 @@ def main() -> None:
         elif game.state == GameState.POWERUP_SELECT and powerup_selected != _prev_powerup_sel:
             audio.sfx_hover()
             _prev_powerup_sel = powerup_selected
-        elif game.state in (GameState.GAME_OVER, GameState.WIN) and result_selected != _prev_result_sel:
+        elif game.state == GameState.GAME_OVER and result_selected != _prev_result_sel:
             audio.sfx_hover()
             _prev_result_sel = result_selected
 
@@ -694,8 +720,8 @@ def main() -> None:
             ui.draw_powerup_select(screen, powerup_selected, frame)
 
 
-        elif game.state in (GameState.GAME_OVER, GameState.WIN):
-            ui.draw_result_screen(screen, game.state == GameState.WIN, game.score.total, result_selected, frame)
+        elif game.state == GameState.GAME_OVER:
+            ui.draw_result_screen(screen, False, game.score.total, game.round, result_selected, frame)
 
         # Transition overlay (drawn last, on top of everything)
         ui.draw_transition(screen)

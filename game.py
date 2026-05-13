@@ -1,8 +1,10 @@
 """
 game.py — Game state manager for Oblivio.
 
-Tracks the high-level game state (MENU, PLAYING, GAME_OVER, WIN),
+Tracks the high-level game state (MENU, PLAYING, GAME_OVER),
 the selected difficulty, and routes click events to the right handler.
+There is no win condition — the game is endless.  When all pairs on a
+board are matched the board refreshes and the score carries forward.
 
 Owner: Jay (game logic)
 """
@@ -21,9 +23,9 @@ from score import Score
 # Constants
 # ---------------------------------------------------------------------------
 
-MISMATCH_DELAY_MS = 1000.0  # ms to show mismatched cards before flipping back
-WIN_DELAY_MS      = 1000.0  # ms to wait after last match before showing WIN screen
-GAME_OVER_DELAY_MS= 1000.0  # ms to wait after last mismatch flip back before showing GAME OVER screen
+MISMATCH_DELAY_MS    = 1000.0  # ms to show mismatched cards before flipping back
+NEXT_ROUND_DELAY_MS  = 1200.0  # ms to wait after last match before starting the next round
+GAME_OVER_DELAY_MS   = 1000.0  # ms to wait after last mismatch flip back before showing GAME OVER screen
 
 
 
@@ -40,8 +42,8 @@ class GameState(Enum):
     PAUSED         = auto()   # Game frozen — pause overlay visible
     OPTIONS        = auto()   # Options menu visible
     POWERUP_SELECT = auto()   # Choosing a buff (Hard Mode only)
-    GAME_OVER      = auto()   # HP reached 0
-    WIN            = auto()   # All pairs matched
+    GAME_OVER      = auto()   # HP reached 0  (only end state — no WIN)
+    NEXT_ROUND     = auto()   # Brief interstitial before the next board loads
 
 
 class Difficulty(Enum):
@@ -101,16 +103,17 @@ class Game:
         self.state           : GameState    = GameState.MENU
         self.difficulty      : Difficulty   = Difficulty.EASY   # default
         self.cards           : list[Card]   = []                # populated by grid.py
+        self.round           : int          = 1                 # current round number
 
         # --- Turn / flip tracking (Week 2) ---
-        self.flipped_cards   : list[Card]   = []     # up to 2 face-up cards this turn
-        self.lock_input      : bool         = False  # True while showing a mismatch
-        self.mismatch_timer  : float        = 0.0    # countdown (ms) until flip-back
-        self.matched_pairs   : int          = 0      # number of pairs found so far
-        self._win_pending    : bool         = False  # True when last match found, waiting for anim
-        self._win_delay      : float        = 0.0    # countdown (ms) before WIN transition
-        self._game_over_pending: bool       = False  # True when HP is 0, waiting for flip back anim
-        self._game_over_delay: float        = 0.0    # countdown (ms) before GAME_OVER transition
+        self.flipped_cards      : list[Card]   = []     # up to 2 face-up cards this turn
+        self.lock_input         : bool         = False  # True while showing a mismatch
+        self.mismatch_timer     : float        = 0.0    # countdown (ms) until flip-back
+        self.matched_pairs      : int          = 0      # number of pairs found so far
+        self._next_round_pending: bool         = False  # True when last pair matched, waiting for anim
+        self._next_round_delay  : float        = 0.0    # countdown (ms) before next round starts
+        self._game_over_pending : bool         = False  # True when HP is 0, waiting for flip back anim
+        self._game_over_delay   : float        = 0.0    # countdown (ms) before GAME_OVER transition
 
         # --- HP & scoring (Week 3) ---
         self.hp              : HPBar        = HPBar()
@@ -138,20 +141,21 @@ class Game:
             A fully-shuffled, position-assigned list of Card objects
             produced by grid.py.
         """
-        self.difficulty      = difficulty
-        self.cards           = cards
-        self.state           = GameState.POWERUP_SELECT if difficulty == Difficulty.HARD else GameState.PLAYING
+        self.difficulty         = difficulty
+        self.cards              = cards
+        self.round              = 1
+        self.state              = GameState.POWERUP_SELECT if difficulty == Difficulty.HARD else GameState.PLAYING
         self.flipped_cards.clear()
-        self.lock_input      = False
-        self.mismatch_timer  = 0.0
-        self.matched_pairs   = 0
-        self._win_pending    = False
-        self._win_delay      = 0.0
-        self._game_over_pending = False
-        self._game_over_delay   = 0.0
-        self.hp              = HPBar()
-        self.score           = Score()
-        self._turn_start_ticks = 0
+        self.lock_input         = False
+        self.mismatch_timer     = 0.0
+        self.matched_pairs      = 0
+        self._next_round_pending = False
+        self._next_round_delay   = 0.0
+        self._game_over_pending  = False
+        self._game_over_delay    = 0.0
+        self.hp                 = HPBar()
+        self.score              = Score()
+        self._turn_start_ticks  = 0
 
         # Reset power-ups
         self.shield_charges  = 0
@@ -162,9 +166,31 @@ class Game:
         """Transition to the GAME_OVER screen."""
         self.state = GameState.GAME_OVER
 
-    def win(self) -> None:
-        """Transition to the WIN screen."""
-        self.state = GameState.WIN
+    def advance_round(self, cards: list[Card]) -> None:
+        """
+        Start the next round with a fresh board.
+
+        Score and HP carry over; only the board and per-round counters reset.
+        Power-ups are NOT stripped (they persist across rounds).
+
+        Parameters
+        ----------
+        cards : list[Card]
+            A fresh, fully-shuffled set of cards from grid.py.
+        """
+        self.round              += 1
+        self.cards               = cards
+        self.state               = GameState.PLAYING
+        self.flipped_cards.clear()
+        self.lock_input          = False
+        self.mismatch_timer      = 0.0
+        self.matched_pairs       = 0
+        self._next_round_pending = False
+        self._next_round_delay   = 0.0
+        self._game_over_pending  = False
+        self._game_over_delay    = 0.0
+        self._turn_start_ticks   = 0
+        print(f"[ROUND {self.round}] New board generated — score carries over: {self.score.total}")
 
     def to_grid_select(self) -> None:
         """Transition to the GRID_SELECT screen."""
@@ -172,22 +198,23 @@ class Game:
 
     def to_menu(self) -> None:
         """Return to the main menu and clear board state."""
-        self.state          = GameState.MENU
-        self.cards          = []
+        self.state               = GameState.MENU
+        self.cards               = []
+        self.round               = 1
         self.flipped_cards.clear()
-        self.lock_input     = False
-        self.mismatch_timer = 0.0
-        self.matched_pairs  = 0
-        self._win_pending   = False
-        self._win_delay     = 0.0
-        self._game_over_pending = False
-        self._game_over_delay   = 0.0
-        self.hp             = HPBar()
-        self.score          = Score()
-        self._turn_start_ticks = 0
-        self.shield_charges  = 0
-        self.lifesteal_active = False
-        self.has_extra_life  = False
+        self.lock_input          = False
+        self.mismatch_timer      = 0.0
+        self.matched_pairs       = 0
+        self._next_round_pending = False
+        self._next_round_delay   = 0.0
+        self._game_over_pending  = False
+        self._game_over_delay    = 0.0
+        self.hp                  = HPBar()
+        self.score               = Score()
+        self._turn_start_ticks   = 0
+        self.shield_charges      = 0
+        self.lifesteal_active    = False
+        self.has_extra_life      = False
 
     def to_pause(self) -> None:
         """Freeze gameplay and show the pause overlay."""
@@ -230,7 +257,7 @@ class Game:
         -------
         Card | None
         """
-        if self.state != GameState.PLAYING or self.lock_input or self._game_over_pending or self._win_pending:
+        if self.state != GameState.PLAYING or self.lock_input or self._game_over_pending or self._next_round_pending:
             return None
 
         for card in self.cards:
@@ -268,7 +295,7 @@ class Game:
             ``"mismatch"`` — second card flipped, no match; timer started.
             ``None``       — flip rejected (wrong state, locked, etc.).
         """
-        if self.state != GameState.PLAYING or self.lock_input or self._game_over_pending or self._win_pending:
+        if self.state != GameState.PLAYING or self.lock_input or self._game_over_pending or self._next_round_pending:
             return None
         if card.state != CardState.FACE_DOWN:
             return None
@@ -304,11 +331,11 @@ class Game:
             )
             self.flipped_cards.clear()
 
-            # --- Win condition: all pairs found ---
+            # --- All pairs matched → queue next round ---
             if self.matched_pairs >= self.difficulty.pairs:
-                print("[WIN] All pairs matched — waiting for flip animation...")
-                self._win_pending = True
-                self._win_delay   = WIN_DELAY_MS
+                print(f"[ROUND CLEAR] All pairs matched — round {self.round} complete! Queuing next round...")
+                self._next_round_pending = True
+                self._next_round_delay   = NEXT_ROUND_DELAY_MS
 
             if self.lifesteal_active:
                 self.hp.heal(5)
@@ -352,13 +379,16 @@ class Game:
         if self.score.tick(dt_ms):
             print("[STREAK] Multiplier timed out — streak reset")
 
-        # --- Pending win delay (let last flip animation play) ---
-        if self._win_pending:
-            self._win_delay -= dt_ms
-            if self._win_delay <= 0:
-                self._win_pending = False
-                print("[WIN] Transition to WIN screen.")
-                self.win()
+        # --- Pending next-round delay (let last flip animation play) ---
+        if self._next_round_pending:
+            self._next_round_delay -= dt_ms
+            if self._next_round_delay <= 0:
+                # Signal main.py to generate a new board.
+                # We set state to NEXT_ROUND; main.py detects the transition
+                # and calls advance_round() with fresh cards.
+                self._next_round_pending = False
+                self.state = GameState.NEXT_ROUND
+                print(f"[NEXT ROUND] Signalling main.py to load round {self.round + 1}.")
             return None
 
         # --- Pending game over delay ---

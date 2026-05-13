@@ -1317,9 +1317,11 @@ def update_result_anim(dt_ms: float) -> None:
 RESULT_ITEMS = ["PLAY AGAIN", "MAIN MENU"]
 _result_rects: list[pygame.Rect] = []
 
-def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selected: int, frame: int) -> None:
+def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_num: int, selected: int, frame: int) -> None:
     """
-    Game Over / Win screen matching the Main Menu aesthetic with dramatic fade-in.
+    Game Over screen matching the Main Menu aesthetic with dramatic fade-in.
+    Displays the score and the round number the player reached.
+    (is_win is kept for signature compatibility but the WIN state no longer exists.)
     """
     global _result_rects, _result_anim_timer
     _result_rects.clear()
@@ -1330,17 +1332,11 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
 
     # ── Animation Timings ────────────────────────────────────────────────
     t = _result_anim_timer
-    if is_win:
-        bg_alpha    = 255
-        title_alpha = min(255, max(0, int((t / 300.0) * 255)))
-        score_alpha = min(255, max(0, int(((t - 200.0) / 300.0) * 255)))
-        btn_alpha   = min(255, max(0, int(((t - 200.0) / 300.0) * 255)))
-    else:
-        # Dramatic but faster reveal for YOU DIED
-        bg_alpha    = min(255, max(0, int((t / 800.0) * 255)))
-        title_alpha = min(255, max(0, int(((t - 600.0) / 1000.0) * 255)))
-        score_alpha = min(255, max(0, int(((t - 1400.0) / 600.0) * 255)))
-        btn_alpha   = min(255, max(0, int(((t - 1400.0) / 600.0) * 255)))
+    # Dramatic reveal for YOU DIED
+    bg_alpha    = min(255, max(0, int((t / 800.0) * 255)))
+    title_alpha = min(255, max(0, int(((t - 600.0) / 1000.0) * 255)))
+    score_alpha = min(255, max(0, int(((t - 1400.0) / 600.0) * 255)))
+    btn_alpha   = min(255, max(0, int(((t - 1400.0) / 600.0) * 255)))
 
     # ── Background Fade ──────────────────────────────────────────────────
     if bg_alpha < 255:
@@ -1357,7 +1353,7 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
     ty = h // 2 - 180   # Centered vertically
 
     # ── Title ───────────────────────────────────────────────────────────
-    label = "YOU WIN!" if is_win else "YOU DIED"
+    label = "YOU DIED"
     color = C_ACCENT
 
     C_DEPTH   = (45, 10, 90)
@@ -1395,15 +1391,20 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, selecte
         pygame.draw.line(sep_surf, (*C_ACCENT, title_alpha), (cx + 50, 2), (cx + line_w, 2), 2)
         screen.blit(sep_surf, (0, sep_y - 2))
 
-    # ── Score ───────────────────────────────────────────────────────────
+    # ── Score & Round ────────────────────────────────────────────────────
     score_y = ty + 150
     if score_alpha > 0:
         sc = _font_lg.render(f"SCORE {score:06d}", False, C_WHITE)
         sc.set_alpha(score_alpha)
         screen.blit(sc, sc.get_rect(centerx=cx, centery=score_y))
 
+        rnd_font = get_gothic_font(24)
+        rnd_surf = rnd_font.render(f"REACHED ROUND {round_num}", False, C_ACCENT)
+        rnd_surf.set_alpha(score_alpha)
+        screen.blit(rnd_surf, rnd_surf.get_rect(centerx=cx, centery=score_y + 44))
+
     # ── Menu items ──────────────────────────────────────────────────────
-    item_y0 = score_y + 80
+    item_y0 = score_y + 110
     item_spacing = 80
     for i, label_str in enumerate(RESULT_ITEMS):
         is_sel = (i == selected)
