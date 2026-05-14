@@ -922,9 +922,6 @@ def draw_hud(
     multiplier: float,
     hud_h:  int,
     frame:  int,
-    shield_charges: int = 0,
-    lifesteal_active: bool = False,
-    has_extra_life: bool = False,
 ) -> None:
     global _prev_score, _score_juice
 
@@ -977,35 +974,6 @@ def draw_hud(
     hp_surf    = label_font.render(f"{hp_int}/100 HP", False, C_DIM)
     screen.blit(hp_surf, (bar_x, bar_top_y - hp_surf.get_height() - 2))
 
-    # ── Power Up Indicators ──────────────────────────────────────────────────
-    px = bar_x + bar_display_w + 30
-    py = bar_top_y
-    icon_spacing = 40
-    
-    # Simple icons using the Joker sprites scaled down or just text for now
-    if shield_charges > 0:
-        # Draw small shield icon (Joker 0)
-        s_icon = pygame.transform.scale(_joker_sprites[0], (14, 21)) if len(_joker_sprites) > 0 else None
-        if s_icon: screen.blit(s_icon, (px, py - 4))
-        sh_text = label_font.render(f"x{shield_charges}", False, (100, 180, 255))
-        screen.blit(sh_text, (px + 18, py))
-        px += icon_spacing + 10
-        
-    if lifesteal_active:
-        # Draw small lifesteal icon (Joker 1)
-        r_icon = pygame.transform.scale(_joker_sprites[1], (14, 21)) if len(_joker_sprites) > 1 else None
-        if r_icon: screen.blit(r_icon, (px, py - 4))
-        rg_text = label_font.render("Lifesteal", False, (100, 255, 100))
-        screen.blit(rg_text, (px + 18, py))
-        px += icon_spacing + 20
-
-    if has_extra_life:
-        # Draw small revive icon (Joker 2)
-        v_icon = pygame.transform.scale(_joker_sprites[2], (14, 21)) if len(_joker_sprites) > 2 else None
-        if v_icon: screen.blit(v_icon, (px, py - 4))
-        rv_text = label_font.render("Revive", False, (255, 100, 100))
-        screen.blit(rv_text, (px + 18, py))
-
 
     # ── Scoreboard (Gothic Housing + Juice) ─────────────────────────────────
     box_w = 240
@@ -1057,6 +1025,48 @@ def draw_hud(
 
     # Draw Floating Texts over everything
     _draw_floating_texts(screen)
+
+
+def draw_powerups(
+    screen: pygame.Surface,
+    shield_charges: int,
+    lifesteal_active: bool,
+    has_extra_life: bool,
+) -> None:
+    """
+    Draw active Power-Ups glued to the bottom-right corner.
+    Uses large sprites and no text labels.
+    """
+    w, h = screen.get_size()
+    
+    # Scale: internal 23x35 -> Big icons (approx 4.2x scale -> 96x147)
+    scale  = 4.2
+    icon_w = int(23 * scale)
+    icon_h = int(35 * scale)
+    
+    margin = 20
+    px = w - icon_w - margin
+    py = h - icon_h - margin
+    
+    # List of active power-up sprites to draw
+    active_sprites = []
+    if shield_charges > 0: 
+        if len(_joker_sprites) > 0: active_sprites.append(_joker_sprites[0])
+    if lifesteal_active:
+        if len(_joker_sprites) > 1: active_sprites.append(_joker_sprites[1])
+    if has_extra_life:
+        if len(_joker_sprites) > 2: active_sprites.append(_joker_sprites[2])
+        
+    # Draw them stacking horizontally to the left from the corner
+    for sprite in reversed(active_sprites):
+        s_icon = pygame.transform.scale(sprite, (icon_w, icon_h))
+        # Drop shadow
+        shadow_rect = pygame.Rect(px + 4, py + 4, icon_w, icon_h)
+        pygame.draw.rect(screen, (0, 0, 0, 150), shadow_rect, border_radius=4)
+        # Main sprite
+        screen.blit(s_icon, (px, py))
+        # Step left for next icon
+        px -= (icon_w + 12)
 
 
 # ---------------------------------------------------------------------------

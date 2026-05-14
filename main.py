@@ -671,8 +671,8 @@ def main() -> None:
 
         elif game.state == GameState.PLAYING:
             ui.draw_game_bg(screen, frame // 4)   # slow spin behind cards
-            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame,
-                        game.shield_charges, game.lifesteal_active, game.has_extra_life)
+            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
+            ui.draw_powerups(screen, game.shield_charges, game.lifesteal_active, game.has_extra_life)
             ui.draw_danger_vignette(screen, game.hp.current_hp, frame)
 
             # Hover detection — find which face-down card the mouse is over
@@ -703,8 +703,8 @@ def main() -> None:
         elif game.state == GameState.PAUSED:
             # Draw the frozen game underneath
             ui.draw_game_bg(screen, frame // 4)
-            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame,
-                        game.shield_charges, game.lifesteal_active, game.has_extra_life)
+            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
+            ui.draw_powerups(screen, game.shield_charges, game.lifesteal_active, game.has_extra_life)
             ui.set_hovered(None)
             ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, game.score.decay_fraction, cursor_pos)
             # Pause overlay on top
