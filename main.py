@@ -12,7 +12,7 @@ import sys
 import pygame
 
 from card import Card, CardState
-from game import Game, GameState, Difficulty
+from game import Game, GameState, Difficulty, GRACE_MISM_COUNT
 import grid
 import ui
 import audio
@@ -671,7 +671,7 @@ def main() -> None:
 
         elif game.state == GameState.PLAYING:
             ui.draw_game_bg(screen, frame // 4)   # slow spin behind cards
-            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
+            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, game.grace_mismatches, GRACE_MISM_COUNT, HUD_H, frame)
             ui.draw_powerups(screen, game.shield_charges, game.lifesteal_active, game.has_extra_life)
             ui.draw_danger_vignette(screen, game.hp.current_hp, frame)
 
@@ -703,7 +703,7 @@ def main() -> None:
         elif game.state == GameState.PAUSED:
             # Draw the frozen game underneath
             ui.draw_game_bg(screen, frame // 4)
-            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, HUD_H, frame)
+            ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, game.grace_mismatches, GRACE_MISM_COUNT, HUD_H, frame)
             ui.draw_powerups(screen, game.shield_charges, game.lifesteal_active, game.has_extra_life)
             ui.set_hovered(None)
             ui.draw_card_grid(screen, game.cards, current_cw, current_ch, game.score.multiplier, game.score.decay_fraction, cursor_pos)

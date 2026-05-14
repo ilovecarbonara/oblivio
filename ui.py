@@ -49,6 +49,7 @@ C_MATCH     = (243,   2,  97)   # match glow
 C_MISMATCH  = (210,  40,  40)   # mismatch flash
 C_OVERHEAL  = ( 60, 140, 255)   # #3C8CFF overheal blue
 C_HUD_BG    = (  7,   3,  14)   # HUD strip background
+C_GRACE     = (255, 185,  40)   # #FFB928  Golden grace period bar
 
 # ---------------------------------------------------------------------------
 # Fonts — Courier New Bold (system), antialias=False for crisp pixel edges
@@ -206,6 +207,9 @@ _hp_drawn:  float = 100.0
 _hp_target: float = 100.0
 HP_LERP = 0.12
 
+_grace_drawn : float = 0.0
+_grace_target: float = 0.0
+
 
 def set_hp(hp: float) -> None:
     global _hp_target
@@ -223,6 +227,13 @@ def _tick_hp() -> None:
     _hp_drawn += d * HP_LERP
     if abs(d) < 0.1:
         _hp_drawn = _hp_target
+
+def _tick_grace() -> None:
+    global _grace_drawn
+    d = _grace_target - _grace_drawn
+    _grace_drawn += d * HP_LERP
+    if abs(d) < 0.05:
+        _grace_drawn = _grace_target
 
 
 # ---------------------------------------------------------------------------
@@ -920,6 +931,8 @@ def draw_hud(
     hp:     float,
     score:  int,
     multiplier: float,
+    grace_mismatches: int,
+    max_grace: int,
     hud_h:  int,
     frame:  int,
 ) -> None:
@@ -973,6 +986,25 @@ def draw_hud(
     hp_int     = max(0, int(round(_hp_drawn)))
     hp_surf    = label_font.render(f"{hp_int}/100 HP", False, C_DIM)
     screen.blit(hp_surf, (bar_x, bar_top_y - hp_surf.get_height() - 2))
+
+    # ── Grace Bar (Gold Overlay) ───────────────────────────────────────────
+    global _grace_target
+    _grace_target = float(grace_mismatches)
+    _tick_grace()
+
+    if _grace_drawn > 0 and max_grace > 0:
+        # Width proportional to grace (max_grace = full bar width)
+        grace_frac = min(1.0, _grace_drawn / float(max_grace))
+        grace_fill_w = int(bar_display_w * grace_frac)
+        
+        if grace_fill_w > 0:
+            # Draw gold bar
+            pygame.draw.rect(screen, C_GRACE, (bar_x, bar_top_y, grace_fill_w, bar_display_h), border_radius=3)
+            
+            # Subtle shine/highlight on top of gold
+            pygame.draw.line(screen, (255, 255, 200), (bar_x + 1, bar_top_y + 1), (bar_x + grace_fill_w - 2, bar_top_y + 1), 1)
+
+    # ── Power-up indicators ... (rest of the logic remains)
 
 
     # ── Scoreboard (Gothic Housing + Juice) ─────────────────────────────────
