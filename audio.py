@@ -192,12 +192,17 @@ def bgm_play_menu() -> None:
     """Play the menu BGM, looping. No-op if already playing."""
     global _bgm_state
     if _bgm_state == "menu":
+        # Ensure it's actually playing (handles cases where it was stopped externally)
+        if _menu_bgm_channel and not _menu_bgm_channel.get_busy():
+            if _menu_bgm_snd:
+                _menu_bgm_channel.play(_menu_bgm_snd, loops=-1)
         return
+
     _bgm_state = "menu"
     pygame.mixer.music.stop()
     if _menu_bgm_snd and _menu_bgm_channel:
-        if not _menu_bgm_channel.get_busy():
-            _menu_bgm_channel.play(_menu_bgm_snd, loops=-1)
+        _menu_bgm_channel.stop()
+        _menu_bgm_channel.play(_menu_bgm_snd, loops=-1)
 
 
 def bgm_play_game(difficulty_label: str = "") -> None:

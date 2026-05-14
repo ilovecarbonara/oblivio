@@ -631,6 +631,7 @@ def main() -> None:
                         cursor_pos = (0, 0)
                         ui.start_preview(_new_cards)
                         ui.reset_hp()
+                        audio.bgm_play_game(game.difficulty.label)
                 else:
                     # Mismatch made, advance immediately
                     _diff_nr = game.difficulty
@@ -641,6 +642,7 @@ def main() -> None:
                     cursor_pos = (0, 0)
                     ui.start_preview(_new_cards)
                     ui.reset_hp()
+                    audio.bgm_play_game(game.difficulty.label)
             
             elif game.state == GameState.GAME_OVER:
                 audio.bgm_play_menu()
