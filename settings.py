@@ -23,9 +23,6 @@ RESOLUTIONS: list[tuple[int, int]] = [
     (1280, 720),    # 16:9
     (1600, 900),    # 16:9
     (1920, 1080),   # 16:9
-    (2560, 1440),   # 16:9
-    (1440, 900),    # 16:10
-    (1920, 1200),   # 16:10
 ]
 
 INPUT_METHODS: list[str] = ["Keyboard & Mouse", "Keyboard", "Mouse"]
