@@ -93,12 +93,17 @@ def _options_adjust(row: int, direction: int, data: dict) -> None:
 
     elif row == 2:  # Master Volume
         data["master_volume"] = round(max(0.0, min(1.0, data["master_volume"] + direction * 0.1)), 2)
+        audio.apply_volumes(data["master_volume"], data["music_volume"], data["sfx_volume"])
+        audio.sfx_hover()
 
     elif row == 3:  # Music Volume
         data["music_volume"] = round(max(0.0, min(1.0, data["music_volume"] + direction * 0.1)), 2)
+        audio.apply_volumes(data["master_volume"], data["music_volume"], data["sfx_volume"])
 
     elif row == 4:  # SFX Volume
         data["sfx_volume"] = round(max(0.0, min(1.0, data["sfx_volume"] + direction * 0.1)), 2)
+        audio.apply_volumes(data["master_volume"], data["music_volume"], data["sfx_volume"])
+        audio.sfx_hover()
 
     elif row == 5:  # Input Method
         data["input_method"] = (data["input_method"] + direction) % len(cfg.INPUT_METHODS)
@@ -207,9 +212,15 @@ def main() -> None:
                         if value_x - 20 <= mx <= value_x + slider_w + 20:
                             pct = (mx - value_x) / slider_w
                             pct = round(max(0.0, min(1.0, pct)), 2)
-                            if options_selected == 2: options_data["master_volume"] = pct
-                            elif options_selected == 3: options_data["music_volume"] = pct
-                            elif options_selected == 4: options_data["sfx_volume"] = pct
+                            if options_selected == 2: 
+                                options_data["master_volume"] = pct
+                            elif options_selected == 3: 
+                                options_data["music_volume"] = pct
+                            elif options_selected == 4: 
+                                options_data["sfx_volume"] = pct
+                            
+                            # Real-time audio update
+                            audio.apply_volumes(options_data["master_volume"], options_data["music_volume"], options_data["sfx_volume"])
                             
                 elif game.state == GameState.GRID_SELECT:
                     idx = ui.get_hovered_difficulty_item(mx, my)
@@ -245,6 +256,8 @@ def main() -> None:
                         audio.sfx_cancel()
                         def _from_options_esc_cb():
                             nonlocal screen, win_w, win_h, current_cw, current_ch
+                            # Revert volumes to persistent settings
+                            audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
                             screen = cfg.apply_display(screen)
                             win_w, win_h = screen.get_size()
                             if game.cards:
@@ -591,9 +604,17 @@ def main() -> None:
                                 if value_x <= mx <= value_x + slider_w:
                                     pct = (mx - value_x) / slider_w
                                     pct = round(max(0.0, min(1.0, pct)), 2)
-                                    if idx == 2: options_data["master_volume"] = pct
-                                    elif idx == 3: options_data["music_volume"] = pct
-                                    elif idx == 4: options_data["sfx_volume"] = pct
+                                    if idx == 2: 
+                                        options_data["master_volume"] = pct
+                                        audio.sfx_hover()
+                                    elif idx == 3: 
+                                        options_data["music_volume"] = pct
+                                    elif idx == 4: 
+                                        options_data["sfx_volume"] = pct
+                                        audio.sfx_hover()
+                                    
+                                    # Real-time audio update
+                                    audio.apply_volumes(options_data["master_volume"], options_data["music_volume"], options_data["sfx_volume"])
                                 else:
                                     if mx < value_x + slider_w / 2:
                                         _options_adjust(idx, -1, options_data)
