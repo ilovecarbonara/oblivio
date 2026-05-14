@@ -77,7 +77,7 @@ def _reposition_grid(game: Game, current_cw: int, current_ch: int, win_w: int, w
 # ---------------------------------------------------------------------------
 # Options-menu input helpers
 # ---------------------------------------------------------------------------
-_OPTIONS_ROW_COUNT = 7   # rows 0-5 = settings, row 6 = APPLY & BACK
+_OPTIONS_ROW_COUNT = 8   # rows 0-5 = settings, row 6 = Language, row 7 = APPLY & BACK
 
 
 def _options_adjust(row: int, direction: int, data: dict) -> None:
@@ -107,6 +107,9 @@ def _options_adjust(row: int, direction: int, data: dict) -> None:
 
     elif row == 5:  # Input Method
         data["input_method"] = (data["input_method"] + direction) % len(cfg.INPUT_METHODS)
+
+    elif row == 6:  # Language
+        data["language_mode"] = (data["language_mode"] + direction) % len(cfg.LANGUAGE_MODES)
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +181,7 @@ def main() -> None:
         "music_volume":  cfg.music_volume,
         "sfx_volume":    cfg.sfx_volume,
         "input_method":  cfg.input_method,
+        "language_mode": cfg.language_mode,
     }
 
     running = True
@@ -293,7 +297,7 @@ def main() -> None:
                 # =====================================================
                 elif event.key in (pygame.K_UP, pygame.K_w):
                     if game.state == GameState.MENU:
-                        menu_selected = (menu_selected - 1) % len(ui.MENU_ITEMS)
+                        menu_selected = (menu_selected - 1) % len(ui.get_menu_items())
                     elif game.state == GameState.GRID_SELECT:
                         grid_selected = (grid_selected - 1) % 4
                     elif game.state == GameState.PLAYING and cursor_pos is not None:
@@ -305,7 +309,7 @@ def main() -> None:
                     elif game.state == GameState.GAME_OVER:
                         result_selected = (result_selected - 1) % 2
                     elif game.state == GameState.PAUSED:
-                        pause_selected = (pause_selected - 1) % len(ui.PAUSE_ITEMS)
+                        pause_selected = (pause_selected - 1) % len(ui.get_pause_items())
                     elif game.state == GameState.OPTIONS:
                         options_selected = (options_selected - 1) % _OPTIONS_ROW_COUNT
 
@@ -314,7 +318,7 @@ def main() -> None:
                 # =====================================================
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
                     if game.state == GameState.MENU:
-                        menu_selected = (menu_selected + 1) % len(ui.MENU_ITEMS)
+                        menu_selected = (menu_selected + 1) % len(ui.get_menu_items())
                     elif game.state == GameState.GRID_SELECT:
                         grid_selected = (grid_selected + 1) % 4
                     elif game.state == GameState.PLAYING and cursor_pos is not None:
@@ -326,7 +330,7 @@ def main() -> None:
                     elif game.state == GameState.GAME_OVER:
                         result_selected = (result_selected + 1) % 2
                     elif game.state == GameState.PAUSED:
-                        pause_selected = (pause_selected + 1) % len(ui.PAUSE_ITEMS)
+                        pause_selected = (pause_selected + 1) % len(ui.get_pause_items())
                     elif game.state == GameState.OPTIONS:
                         options_selected = (options_selected + 1) % _OPTIONS_ROW_COUNT
 
@@ -395,6 +399,7 @@ def main() -> None:
                                 "music_volume":  cfg.music_volume,
                                 "sfx_volume":    cfg.sfx_volume,
                                 "input_method":  cfg.input_method,
+                                "language_mode": cfg.language_mode,
                             })
                             game.to_options(GameState.MENU)
                         ui.start_transition(_to_options_cb)
@@ -495,6 +500,7 @@ def main() -> None:
                                 "music_volume":  cfg.music_volume,
                                 "sfx_volume":    cfg.sfx_volume,
                                 "input_method":  cfg.input_method,
+                                "language_mode": cfg.language_mode,
                             })
                             game.to_options(GameState.PAUSED)
                         ui.start_transition(_pause_to_options_cb)
@@ -509,7 +515,7 @@ def main() -> None:
 
                 # --- Options ---
                 elif game.state == GameState.OPTIONS and not ui.is_transition_active():
-                    if options_selected == 6:      # APPLY & BACK
+                    if options_selected == 7:      # APPLY & BACK
                         audio.sfx_select()
                         def _apply_and_back_cb():
                             nonlocal screen, win_w, win_h, current_cw, current_ch
@@ -520,6 +526,7 @@ def main() -> None:
                             cfg.music_volume  = options_data["music_volume"]
                             cfg.sfx_volume    = options_data["sfx_volume"]
                             cfg.input_method  = options_data["input_method"]
+                            cfg.language_mode = options_data["language_mode"]
                             
                             cfg.save()
                             screen = cfg.apply_display(screen)
@@ -590,9 +597,9 @@ def main() -> None:
                     elif game.state == GameState.OPTIONS:
                         idx = ui.get_hovered_options_item(mx, my)
                         if idx is not None:
-                            if idx == 6:  # APPLY & BACK
+                            if idx == 7:  # APPLY & BACK
                                 pygame.event.post(pygame.event.Event(EVENT_SELECT))
-                            elif idx in (0, 1, 5): # Display, Res, Input Method
+                            elif idx in (0, 1, 5, 6): # Display, Res, Input Method, Language
                                 value_x = (win_w // 2) + 40
                                 if mx < value_x + 80:
                                     _options_adjust(idx, -1, options_data)
