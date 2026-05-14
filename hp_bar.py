@@ -11,7 +11,8 @@ Owner: Jay (data/logic) / Jim (rendering)
 class HPBar:
     """Tracks the player's health points during a game session."""
 
-    MAX_HP = 100
+    MAX_HP       = 100
+    ABSOLUTE_MAX = 200
 
     def __init__(self) -> None:
         self.current_hp: int = self.MAX_HP
@@ -22,7 +23,12 @@ class HPBar:
 
     def heal(self, amount: int) -> None:
         """Add *amount* HP, clamping at MAX_HP."""
-        self.current_hp = min(self.MAX_HP, self.current_hp + amount)
+        if self.current_hp < self.MAX_HP:
+            self.current_hp = min(self.MAX_HP, self.current_hp + amount)
+
+    def add_overheal(self, amount: int) -> None:
+        """Add *amount* HP, allowing it to exceed MAX_HP, but capping at ABSOLUTE_MAX."""
+        self.current_hp = min(self.ABSOLUTE_MAX, self.current_hp + amount)
 
     @property
     def is_depleted(self) -> bool:
@@ -31,5 +37,5 @@ class HPBar:
 
     @property
     def fraction(self) -> float:
-        """0.0 (empty) → 1.0 (full) — used by Jim's renderer."""
+        """0.0 (empty) → 1.0 (full) — used by Jim's renderer. Can exceed 1.0."""
         return self.current_hp / self.MAX_HP

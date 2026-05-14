@@ -25,6 +25,7 @@ from score import Score
 
 MISMATCH_DELAY_MS    = 1000.0  # ms to show mismatched cards before flipping back
 NEXT_ROUND_DELAY_MS  = 1200.0  # ms to wait after last match before starting the next round
+GRACE_MISM_COUNT     = 8    # mismatches allowed in Hellish mode before HP loss starts
 GAME_OVER_DELAY_MS   = 1000.0  # ms to wait after last mismatch flip back before showing GAME OVER screen
 
 
@@ -52,13 +53,13 @@ class Difficulty(Enum):
     and HP penalty per mismatch.
 
     Grid sizes from GDD §3:
-        Easy   → 4×4  (8 pairs,  −10 HP per mismatch)
-        Medium → 6×6  (18 pairs, −15 HP per mismatch)
-        Hard   → 8×8  (32 pairs, −20 HP per mismatch)
+        Easy   → 4×4  (8 pairs,  -20 HP per mismatch)
+        Medium → 6×6  (18 pairs, -10 HP per mismatch)
+        Hard   → 8×8  (32 pairs, −5 HP per mismatch)
     """
-    EASY   = ("Easy",   4, 4,  8, 10)
-    MEDIUM = ("Medium", 6, 6, 18, 15)
-    HARD   = ("Hellish", 8, 8, 32, 20)
+    EASY   = ("Easy",   4, 4,  8, 20)
+    MEDIUM = ("Medium", 6, 6, 18, 10)
+    HARD   = ("Hellish", 8, 8, 32, 10)
 
     def __init__(
         self,
@@ -125,6 +126,11 @@ class Game:
         self.lifesteal_active: bool         = False
         self.has_extra_life  : bool         = False
 
+        # --- New Reward System ---
+        self.successive_matches: int        = 0      # streak for regen rewards
+        self.grace_mismatches  : int          = 0      # number of free mismatches remaining
+        self.last_round_was_perfect: bool     = False  # True if the previous round had no mistakes
+
     # ------------------------------------------------------------------
     # State transitions
     # ------------------------------------------------------------------
@@ -157,10 +163,18 @@ class Game:
         self.score              = Score()
         self._turn_start_ticks  = 0
 
+        # Reset reward tracking
+        self.successive_matches = 0
+        self.mistakes_made      = False
+        self.last_round_was_perfect = False
+
         # Reset power-ups
         self.shield_charges  = 0
         self.lifesteal_active = False
         self.has_extra_life  = False
+
+        # Reset grace period for Hellish
+        self.grace_mismatches = GRACE_MISM_COUNT if difficulty == Difficulty.HARD else 0
 
     def game_over(self) -> None:
         """Transition to the GAME_OVER screen."""
@@ -190,6 +204,21 @@ class Game:
         self._game_over_pending  = False
         self._game_over_delay    = 0.0
         self._turn_start_ticks   = 0
+
+        # Regeneration for clearing the previous round
+        self.hp.heal(25)
+
+        # Perfect Round Reward
+        if not self.mistakes_made:
+            self.hp.add_overheal(50)
+            self.last_round_was_perfect = True
+            print(f"[REGEN] Perfect Round! +50 HP overheal bonus. (Current: {self.hp.current_hp})")
+        else:
+            self.last_round_was_perfect = False
+
+        self.mistakes_made = False
+        self.grace_mismatches = GRACE_MISM_COUNT if self.difficulty == Difficulty.HARD else 0
+        print(f"[REGEN] Round {self.round-1} cleared! +25 HP (Current: {self.hp.current_hp})")
         print(f"[ROUND {self.round}] New board generated — score carries over: {self.score.total}")
 
     def to_grid_select(self) -> None:
@@ -215,6 +244,9 @@ class Game:
         self.shield_charges      = 0
         self.lifesteal_active    = False
         self.has_extra_life      = False
+        self.successive_matches  = 0
+        self.mistakes_made       = False
+        self.grace_mismatches    = 0
 
     def to_pause(self) -> None:
         """Freeze gameplay and show the pause overlay."""
@@ -341,10 +373,23 @@ class Game:
                 self.hp.heal(5)
                 print(f"[LIFESTEAL] Match found! +5 HP (Current: {self.hp.current_hp})")
 
+            # --- Successive Match Rewards ---
+            self.successive_matches += 1
+            if self.successive_matches == 3:
+                self.hp.add_overheal(10)
+                print(f"[REGEN] 3 successive matches! +10 HP reward. (Current: {self.hp.current_hp})")
+            elif self.successive_matches == 5:
+                self.hp.add_overheal(15)
+                print(f"[REGEN] 5 successive matches! +15 HP reward. (Current: {self.hp.current_hp})")
+                self.successive_matches = 0  # reset to allow the cycle to repeat
+
             return "match"
 
         # Mismatch — lock input, deduct HP, reset streak, start countdown
-        if self.shield_charges > 0:
+        if self.grace_mismatches > 0:
+            self.grace_mismatches -= 1
+            print(f"[GRACE] Mismatch ignored! Grace remaining: {self.grace_mismatches}")
+        elif self.shield_charges > 0:
             self.shield_charges -= 1
             print(f"[SHIELD] Mismatch blocked! Charges remaining: {self.shield_charges}")
         else:
@@ -356,6 +401,8 @@ class Game:
             )
         
         self.score.reset_streak()
+        self.successive_matches = 0
+        self.mistakes_made      = True
         self.lock_input     = True
         self.mismatch_timer = MISMATCH_DELAY_MS
         return "mismatch"

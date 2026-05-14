@@ -47,7 +47,9 @@ C_WHITE     = (255, 255, 255)   # title colour — stark and cold
 C_DIM       = (180, 160, 190)   # lighter purple-grey for better readability
 C_MATCH     = (243,   2,  97)   # match glow
 C_MISMATCH  = (210,  40,  40)   # mismatch flash
+C_OVERHEAL  = ( 60, 140, 255)   # #3C8CFF overheal blue
 C_HUD_BG    = (  7,   3,  14)   # HUD strip background
+C_GRACE     = (255, 185,  40)   # #FFB928  Golden grace period bar
 
 # ---------------------------------------------------------------------------
 # Fonts — Courier New Bold (system), antialias=False for crisp pixel edges
@@ -205,6 +207,9 @@ _hp_drawn:  float = 100.0
 _hp_target: float = 100.0
 HP_LERP = 0.12
 
+_grace_drawn : float = 0.0
+_grace_target: float = 0.0
+
 
 def set_hp(hp: float) -> None:
     global _hp_target
@@ -222,6 +227,13 @@ def _tick_hp() -> None:
     _hp_drawn += d * HP_LERP
     if abs(d) < 0.1:
         _hp_drawn = _hp_target
+
+def _tick_grace() -> None:
+    global _grace_drawn
+    d = _grace_target - _grace_drawn
+    _grace_drawn += d * HP_LERP
+    if abs(d) < 0.05:
+        _grace_drawn = _grace_target
 
 
 # ---------------------------------------------------------------------------
@@ -588,6 +600,124 @@ def update_match_pulse(dt: float = 1.0) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Perfection Popup
+# ---------------------------------------------------------------------------
+_perf_timer:  float = 0.0
+_perf_active: bool  = False
+PERF_DURATION_MS = 2200.0
+
+
+def trigger_perfection_popup() -> None:
+    """Trigger the 'PERFECTION' popup for matching all cards perfectly."""
+    global _perf_timer, _perf_active
+    _perf_timer  = PERF_DURATION_MS
+    _perf_active = True
+
+
+def update_perfection_popup(dt_ms: float) -> None:
+    global _perf_timer, _perf_active
+    if not _perf_active:
+        return
+    _perf_timer -= dt_ms
+    if _perf_timer <= 0:
+        _perf_active = False
+
+
+def draw_perfection_popup(screen: pygame.Surface) -> None:
+    """Draw a flashy 'PERFECTION' message with glow and animation."""
+    if not _perf_active or _perf_timer <= 0:
+        return
+
+    if _font_title is None:
+        return
+
+    w, h = screen.get_size()
+    cx, cy = w // 2, h // 2
+    
+    # Progress: 0.0 (start) -> 1.0 (end)
+    t = 1.0 - (_perf_timer / PERF_DURATION_MS)
+    
+    # Animation: scale up and fade out
+    # Starts big and fades in, then stays, then fades out?
+    # Let's do:
+    # 0.0 - 0.2: Fade in & Scale up (overshoot)
+    # 0.2 - 0.8: Hold & pulse
+    # 0.8 - 1.0: Fade out & Scale up further
+    
+    alpha = 255
+    scale = 1.0
+    
+    if t < 0.2:
+        # Intro
+        sub_t = t / 0.2
+        alpha = int(255 * sub_t)
+        scale = 0.5 + 0.6 * sub_t   # starts small, grows to 1.1
+    elif t < 0.8:
+        # Hold
+        alpha = 255
+        scale = 1.1 + 0.05 * math.sin(t * 20)  # gentle pulse
+    else:
+        # Outro
+        sub_t = (t - 0.8) / 0.2
+        alpha = int(255 * (1.0 - sub_t))
+        scale = 1.1 + 0.3 * sub_t   # expands as it vanishes
+        
+    label = "PERFECTION"
+    
+    # Render with layers
+    C_DEPTH   = (45, 10, 90)
+    C_OUTLINE = (255, 255, 255)
+    DEPTH     = 8
+    OUTLINE   = 2
+    
+    # Base surface
+    base_surf = _font_title.render(label, False, C_ACCENT)
+    
+    # Scaling
+    sw = int(base_surf.get_width() * scale)
+    sh = int(base_surf.get_height() * scale)
+    if sw <= 0 or sh <= 0: return
+    
+    # Render layers
+    depth_surf   = _font_title.render(label, False, C_DEPTH)
+    outline_surf = _font_title.render(label, False, C_OUTLINE)
+    title_surf   = _font_title.render(label, False, C_ACCENT)
+    
+    # Scale layers
+    depth_surf   = pygame.transform.scale(depth_surf,   (sw, sh))
+    outline_surf = pygame.transform.scale(outline_surf, (sw, sh))
+    title_surf   = pygame.transform.scale(title_surf,   (sw, sh))
+    
+    # Apply alpha
+    depth_surf.set_alpha(alpha)
+    outline_surf.set_alpha(alpha)
+    title_surf.set_alpha(alpha)
+    
+    # Center rect
+    rect = title_surf.get_rect(center=(cx, cy))
+    
+    # Blit layers
+    for d in range(int(DEPTH * scale), 0, -1):
+        screen.blit(depth_surf, (rect.x + d, rect.y + d))
+        
+    for ox in range(-OUTLINE, OUTLINE + 1):
+        for oy in range(-OUTLINE, OUTLINE + 1):
+            if ox == 0 and oy == 0: continue
+            screen.blit(outline_surf, (rect.x + ox, rect.y + oy))
+            
+    screen.blit(title_surf, rect)
+    
+    # Extra glow: "OVERHEALED" text below if relevant? 
+    # Or just "ROUND CLEAR" 
+    sub_font = get_gothic_font(24)
+    sub_label = "+50 HP OVERHEAL"
+    sub_surf = sub_font.render(sub_label, False, C_OVERHEAL)
+    sub_surf.set_alpha(alpha)
+    sub_rect = sub_surf.get_rect(centerx=cx, centery=rect.bottom + 40)
+    screen.blit(sub_surf, sub_rect)
+
+
+# ---------------------------------------------------------------------------
 # Main Menu
 # ---------------------------------------------------------------------------
 MENU_ITEMS = ["PLAY", "OPTIONS", "QUIT"]
@@ -919,11 +1049,10 @@ def draw_hud(
     hp:     float,
     score:  int,
     multiplier: float,
+    grace_mismatches: int,
+    max_grace: int,
     hud_h:  int,
     frame:  int,
-    shield_charges: int = 0,
-    lifesteal_active: bool = False,
-    has_extra_life: bool = False,
 ) -> None:
     global _prev_score, _score_juice
 
@@ -941,10 +1070,15 @@ def draw_hud(
     bar_display_h = 14
     bar_top_y     = hud_h // 2 - bar_display_h // 2
 
-    fill_w  = max(0, int(bar_display_w * (_hp_drawn / 100.0)))
-    hp_frac = _hp_drawn / 100.0
+    # Split HP into normal and overheal
+    normal_hp   = min(100.0, _hp_drawn)
+    overheal_hp = max(0.0, _hp_drawn - 100.0)
 
-    # Color: magenta (#F30261) at full → deep crimson (#8B0000) at critical
+    normal_fill_w   = max(0, int(bar_display_w * (normal_hp / 100.0)))
+    overheal_fill_w = int(bar_display_w * (overheal_hp / 100.0))
+
+    # Color for normal part: magenta (#F30261) at full → deep crimson (#8B0000) at critical
+    hp_frac = normal_hp / 100.0
     r = int(243 + (139 - 243) * (1.0 - hp_frac))
     g = int(  2 + (  0 -   2) * (1.0 - hp_frac))
     b = int( 97 + (  0 -  97) * (1.0 - hp_frac))
@@ -952,11 +1086,18 @@ def draw_hud(
 
     # Track (empty portion)
     pygame.draw.rect(screen, (18, 6, 28), (bar_x, bar_top_y, bar_display_w, bar_display_h), border_radius=3)
-    # Fill
-    if fill_w > 0:
-        pygame.draw.rect(screen, bar_color, (bar_x, bar_top_y, fill_w, bar_display_h), border_radius=3)
-    # Border
-    pygame.draw.rect(screen, C_ACCENT_DK, (bar_x, bar_top_y, bar_display_w, bar_display_h), 1, border_radius=3)
+    
+    # Fill normal
+    if normal_fill_w > 0:
+        pygame.draw.rect(screen, bar_color, (bar_x, bar_top_y, normal_fill_w, bar_display_h), border_radius=3)
+    
+    # Fill overheal (extends beyond the track)
+    if overheal_fill_w > 0:
+        pygame.draw.rect(screen, C_OVERHEAL, (bar_x + bar_display_w, bar_top_y, overheal_fill_w, bar_display_h), border_radius=3)
+
+    # Border (covers the entire visible health)
+    total_w = bar_display_w + overheal_fill_w
+    pygame.draw.rect(screen, C_ACCENT_DK, (bar_x, bar_top_y, total_w, bar_display_h), 1, border_radius=3)
 
     # HP text label above the bar
     label_font = get_gothic_font(14)
@@ -964,34 +1105,24 @@ def draw_hud(
     hp_surf    = label_font.render(f"{hp_int}/100 HP", False, C_DIM)
     screen.blit(hp_surf, (bar_x, bar_top_y - hp_surf.get_height() - 2))
 
-    # ── Power Up Indicators ──────────────────────────────────────────────────
-    px = bar_x + bar_display_w + 30
-    py = bar_top_y
-    icon_spacing = 40
-    
-    # Simple icons using the Joker sprites scaled down or just text for now
-    if shield_charges > 0:
-        # Draw small shield icon (Joker 0)
-        s_icon = pygame.transform.scale(_joker_sprites[0], (14, 21)) if len(_joker_sprites) > 0 else None
-        if s_icon: screen.blit(s_icon, (px, py - 4))
-        sh_text = label_font.render(f"x{shield_charges}", False, (100, 180, 255))
-        screen.blit(sh_text, (px + 18, py))
-        px += icon_spacing + 10
-        
-    if lifesteal_active:
-        # Draw small lifesteal icon (Joker 1)
-        r_icon = pygame.transform.scale(_joker_sprites[1], (14, 21)) if len(_joker_sprites) > 1 else None
-        if r_icon: screen.blit(r_icon, (px, py - 4))
-        rg_text = label_font.render("Lifesteal", False, (100, 255, 100))
-        screen.blit(rg_text, (px + 18, py))
-        px += icon_spacing + 20
+    # ── Grace Bar (Gold Overlay) ───────────────────────────────────────────
+    global _grace_target
+    _grace_target = float(grace_mismatches)
+    _tick_grace()
 
-    if has_extra_life:
-        # Draw small revive icon (Joker 2)
-        v_icon = pygame.transform.scale(_joker_sprites[2], (14, 21)) if len(_joker_sprites) > 2 else None
-        if v_icon: screen.blit(v_icon, (px, py - 4))
-        rv_text = label_font.render("Revive", False, (255, 100, 100))
-        screen.blit(rv_text, (px + 18, py))
+    if _grace_drawn > 0 and max_grace > 0:
+        # Width proportional to grace (max_grace = full bar width)
+        grace_frac = min(1.0, _grace_drawn / float(max_grace))
+        grace_fill_w = int(bar_display_w * grace_frac)
+        
+        if grace_fill_w > 0:
+            # Draw gold bar
+            pygame.draw.rect(screen, C_GRACE, (bar_x, bar_top_y, grace_fill_w, bar_display_h), border_radius=3)
+            
+            # Subtle shine/highlight on top of gold
+            pygame.draw.line(screen, (255, 255, 200), (bar_x + 1, bar_top_y + 1), (bar_x + grace_fill_w - 2, bar_top_y + 1), 1)
+
+    # ── Power-up indicators ... (rest of the logic remains)
 
 
     # ── Scoreboard (Gothic Housing + Juice) ─────────────────────────────────
@@ -1044,6 +1175,48 @@ def draw_hud(
 
     # Draw Floating Texts over everything
     _draw_floating_texts(screen)
+
+
+def draw_powerups(
+    screen: pygame.Surface,
+    shield_charges: int,
+    lifesteal_active: bool,
+    has_extra_life: bool,
+) -> None:
+    """
+    Draw active Power-Ups glued to the bottom-right corner.
+    Uses large sprites and no text labels.
+    """
+    w, h = screen.get_size()
+    
+    # Scale: internal 23x35 -> Big icons (approx 4.2x scale -> 96x147)
+    scale  = 4.2
+    icon_w = int(23 * scale)
+    icon_h = int(35 * scale)
+    
+    margin = 20
+    px = w - icon_w - margin
+    py = h - icon_h - margin
+    
+    # List of active power-up sprites to draw
+    active_sprites = []
+    if shield_charges > 0: 
+        if len(_joker_sprites) > 0: active_sprites.append(_joker_sprites[0])
+    if lifesteal_active:
+        if len(_joker_sprites) > 1: active_sprites.append(_joker_sprites[1])
+    if has_extra_life:
+        if len(_joker_sprites) > 2: active_sprites.append(_joker_sprites[2])
+        
+    # Draw them stacking horizontally to the left from the corner
+    for sprite in reversed(active_sprites):
+        s_icon = pygame.transform.scale(sprite, (icon_w, icon_h))
+        # Drop shadow
+        shadow_rect = pygame.Rect(px + 4, py + 4, icon_w, icon_h)
+        pygame.draw.rect(screen, (0, 0, 0, 150), shadow_rect, border_radius=4)
+        # Main sprite
+        screen.blit(s_icon, (px, py))
+        # Step left for next icon
+        px -= (icon_w + 12)
 
 
 # ---------------------------------------------------------------------------
