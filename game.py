@@ -53,11 +53,11 @@ class Difficulty(Enum):
     and HP penalty per mismatch.
 
     Grid sizes from GDD §3:
-        Easy   → 4×4  (8 pairs,  -20 HP per mismatch)
+        Easy   → 4×4  (8 pairs,  -15 HP per mismatch)
         Medium → 6×6  (18 pairs, -10 HP per mismatch)
         Hard   → 8×8  (32 pairs, −5 HP per mismatch)
     """
-    EASY   = ("Easy",   4, 4,  8, 20)
+    EASY   = ("Easy",   4, 4,  8, 15)
     MEDIUM = ("Medium", 6, 6, 18, 10)
     HARD   = ("Hellish", 8, 8, 32, 10)
 

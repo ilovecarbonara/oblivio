@@ -50,6 +50,44 @@ C_MISMATCH  = (210,  40,  40)   # mismatch flash
 C_OVERHEAL  = ( 60, 140, 255)   # #3C8CFF overheal blue
 C_HUD_BG    = (  7,   3,  14)   # HUD strip background
 C_GRACE     = (255, 185,  40)   # #FFB928  Golden grace period bar
+C_OVERHEAL  = ( 60, 140, 255)   # #3C8CFF overheal blue
+
+# ---------------------------------------------------------------------------
+# Language Labels (Normal vs Dark)
+# ---------------------------------------------------------------------------
+
+_NORMAL_LABELS = {
+    "menu_items": ["PLAY", "OPTIONS", "QUIT"],
+    "pause_items": ["CONTINUE", "RESTART", "OPTIONS", "QUIT"],
+    "pause_title": "PAUSED",
+    "options_title": "SETTINGS",
+    "result_title": "GAME OVER",
+    "result_items": ["PLAY AGAIN", "MAIN MENU"],
+    "difficulty_items": ["Easy", "Medium", "Hard", "Back"],
+    "perfection_title": "PERFECT",
+    "overheal_label": "+50 HP OVERHEAL",
+}
+
+_DARK_LABELS = {
+    "menu_items": ["BEGIN THE RECLAMATION", "ATTUNE SENSES", "EMBRACE OBLIVION"],
+    "pause_items": ["PERSIST", "REKINDLE", "ATTUNE SENSES", "SURRENDER"],
+    "pause_title": "STASIS",
+    "options_title": "SENSES",
+    "result_title": "ALL IS FORGOTTEN",
+    "result_items": ["SEEK REMEMBRANCE", "ABANDON THE LIGHT"],
+    "difficulty_items": ["Mortal", "Scorched", "Hellish", "Back"],
+    "perfection_title": "PERFECTION",
+    "overheal_label": "+50 HP OVERHEAL",
+}
+
+def get_ui_label(key: str, override_mode: int = None) -> any:
+    """Return the label for the given key based on current language mode."""
+    import settings
+    mode = override_mode if override_mode is not None else settings.language_mode
+    if mode == 0:  # Normal
+        return _NORMAL_LABELS.get(key, key)
+    else:          # Dark
+        return _DARK_LABELS.get(key, key)
 
 # ---------------------------------------------------------------------------
 # Fonts — Courier New Bold (system), antialias=False for crisp pixel edges
@@ -681,7 +719,7 @@ def draw_perfection_popup(screen: pygame.Surface) -> None:
         alpha = int(255 * (1.0 - sub_t))
         scale = 1.1 + 0.3 * sub_t   # expands as it vanishes
         
-    label = "PERFECTION"
+    label = get_ui_label("perfection_title")
     
     # Render with layers
     C_DEPTH   = (45, 10, 90)
@@ -726,10 +764,9 @@ def draw_perfection_popup(screen: pygame.Surface) -> None:
             
     screen.blit(title_surf, rect)
     
-    # Extra glow: "OVERHEALED" text below if relevant? 
     # Or just "ROUND CLEAR" 
     sub_font = get_gothic_font(24)
-    sub_label = "+50 HP OVERHEAL"
+    sub_label = get_ui_label("overheal_label")
     sub_surf = sub_font.render(sub_label, False, C_OVERHEAL)
     sub_surf.set_alpha(alpha)
     sub_rect = sub_surf.get_rect(centerx=cx, centery=rect.bottom + 40)
@@ -739,8 +776,10 @@ def draw_perfection_popup(screen: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 # Main Menu
 # ---------------------------------------------------------------------------
-MENU_ITEMS = ["PLAY", "OPTIONS", "QUIT"]
 _menu_rects: list[pygame.Rect] = []
+
+def get_menu_items() -> list[str]:
+    return get_ui_label("menu_items")
 
 def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     """
@@ -798,7 +837,8 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     # ── Menu items ─────────────────────────────────────────────────────────
     item_y0      = sep_y + 60
     item_spacing = 80
-    for i, label in enumerate(MENU_ITEMS):
+    items        = get_menu_items()
+    for i, label in enumerate(items):
         is_sel = (i == selected)
         color  = C_WHITE if is_sel else C_DIM
         iy     = item_y0 + i * item_spacing
@@ -1249,8 +1289,10 @@ def draw_esc_hint(screen: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 # Pause overlay  —  drawn ON TOP of the frozen game frame
 # ---------------------------------------------------------------------------
-PAUSE_ITEMS = ["RESUME", "RESTART", "OPTIONS", "QUIT"]
 _pause_rects: list[pygame.Rect] = []
+
+def get_pause_items() -> list[str]:
+    return get_ui_label("pause_items")
 
 def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> None:
     """
@@ -1273,8 +1315,9 @@ def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> Non
 
     # Title
     title_font = get_gothic_font(48)
-    title_surf = title_font.render("PAUSED", False, C_WHITE)
-    shadow_surf = title_font.render("PAUSED", False, C_ACCENT_DK)
+    title_text = get_ui_label("pause_title") if "pause_title" in _NORMAL_LABELS else "PAUSED"
+    title_surf = title_font.render(title_text, False, C_WHITE)
+    shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
     title_rect = title_surf.get_rect(centerx=cx, centery=h // 2 - 120)
     screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
     screen.blit(title_surf, title_rect)
@@ -1286,7 +1329,8 @@ def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> Non
     # Menu items
     item_y0 = sep_y + 40
     item_spacing = 60
-    for i, label in enumerate(PAUSE_ITEMS):
+    items = get_pause_items()
+    for i, label in enumerate(items):
         is_sel = (i == selected)
         color  = C_WHITE if is_sel else C_DIM
         iy     = item_y0 + i * item_spacing
@@ -1322,6 +1366,7 @@ _OPT_LABELS = [
     "MUSIC VOLUME",
     "SFX VOLUME",
     "INPUT METHOD",
+    "LANGUAGE",
     "",              # APPLY & BACK button row
 ]
 _options_rects: list[pygame.Rect] = []
@@ -1400,8 +1445,9 @@ def draw_options_menu(
 
     # ── Title ───────────────────────────────────────────────────────────
     title_font = get_gothic_font(48)
-    title_surf = title_font.render("OPTIONS", False, C_WHITE)
-    shadow_surf = title_font.render("OPTIONS", False, C_ACCENT_DK)
+    title_text = get_ui_label("options_title", override_mode=opts.get("language_mode"))
+    title_surf = title_font.render(title_text, False, C_WHITE)
+    shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
     title_rect = title_surf.get_rect(centerx=cx, centery=80)
     screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
     screen.blit(title_surf, title_rect)
@@ -1419,13 +1465,13 @@ def draw_options_menu(
     label_x = cx - 280   # left-aligned labels
     value_x = cx + 40    # right-aligned values area
 
-    for row in range(7):
+    for row in range(8):
         is_sel = (row == selected_row)
         ry = row_y0 + row * row_spacing
         color = C_WHITE if is_sel else C_DIM
 
-        # Row 6 is the APPLY & BACK button
-        if row == 6:
+        # Row 7 is the APPLY & BACK button
+        if row == 7:
             btn_label = "APPLY & BACK"
             if is_sel:
                 btn_label = f"> {btn_label} <"
@@ -1491,12 +1537,22 @@ def draw_options_menu(
             val_surf = value_font.render(val_str, False, color)
             screen.blit(val_surf, (value_x, ry - val_surf.get_height() // 2))
 
+        elif row == 6:  # Language
+            import settings
+            lang_label = settings.LANGUAGE_MODES[opts["language_mode"]]
+            val_str = f"< {lang_label} >"
+            val_surf = value_font.render(val_str, False, color)
+            screen.blit(val_surf, (value_x, ry - val_surf.get_height() // 2))
+
 
 
 # ---------------------------------------------------------------------------
 # Result Screen (Game Over / Win)
 # ---------------------------------------------------------------------------
 _result_anim_timer: float = 0.0
+
+def get_result_items() -> list[str]:
+    return get_ui_label("result_items")
 
 def start_result_anim() -> None:
     global _result_anim_timer
@@ -1506,7 +1562,7 @@ def update_result_anim(dt_ms: float) -> None:
     global _result_anim_timer
     _result_anim_timer += dt_ms
 
-RESULT_ITEMS = ["PLAY AGAIN", "MAIN MENU"]
+RESULT_ITEMS = ["SEEK REMEMBRANCE", "ABANDON THE LIGHT"]
 _result_rects: list[pygame.Rect] = []
 
 def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_num: int, selected: int, frame: int) -> None:
@@ -1545,7 +1601,7 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_n
     ty = h // 2 - 180   # Centered vertically
 
     # ── Title ───────────────────────────────────────────────────────────
-    label = "YOU DIED"
+    label = get_ui_label("result_title")
     color = C_ACCENT
 
     C_DEPTH   = (45, 10, 90)
@@ -1598,7 +1654,8 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_n
     # ── Menu items ──────────────────────────────────────────────────────
     item_y0 = score_y + 110
     item_spacing = 80
-    for i, label_str in enumerate(RESULT_ITEMS):
+    items = get_result_items()
+    for i, label_str in enumerate(items):
         is_sel = (i == selected)
         color_item = C_WHITE if is_sel else C_DIM
         iy = item_y0 + i * item_spacing
@@ -1631,8 +1688,10 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_n
 # ---------------------------------------------------------------------------
 # Difficulty Selection
 # ---------------------------------------------------------------------------
-DIFFICULTY_ITEMS = ["Mortal", "Scorched", "Hellish", "Back"]
 _diff_rects: list[pygame.Rect] = []
+
+def get_difficulty_items() -> list[str]:
+    return get_ui_label("difficulty_items")
 
 def draw_difficulty_select(screen: pygame.Surface, selected: int, frame: int) -> None:
     """
@@ -1688,7 +1747,8 @@ def draw_difficulty_select(screen: pygame.Surface, selected: int, frame: int) ->
     # ── Menu items ──────────────────────────────────────────────────────
     item_y0 = sep_y + 60
     item_spacing = 80
-    for i, label_str in enumerate(DIFFICULTY_ITEMS):
+    items = get_difficulty_items()
+    for i, label_str in enumerate(items):
         is_sel = (i == selected)
         color_item = C_WHITE if is_sel else C_DIM
         iy = item_y0 + i * item_spacing
