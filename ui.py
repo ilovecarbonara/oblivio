@@ -801,7 +801,7 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
 
     w  = screen.get_width()
     h  = screen.get_height()
-    cx = w // 2
+    left_x = 80         # Left-aligned anchor
     ty = h // 2 - 140   # Centered vertically (offset to account for menu items below)
 
     # ── OBLIVIO title — 3-layer extruded pixel-art style ──────────────────
@@ -810,14 +810,15 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     DEPTH     = 10                # px of 3D block shadow
     OUTLINE   = 3                 # outline thickness
 
-    depth_surf   = _font_title.render("OBLIVIO", False, C_DEPTH)
-    outline_surf = _font_title.render("OBLIVIO", False, C_OUTLINE)
-    title_surf   = _font_title.render("OBLIVIO", False, C_ACCENT)
-    title_rect   = title_surf.get_rect(centerx=cx, centery=ty)
+    title_text = "OBLIVIO"
+    depth_surf   = _font_title.render(title_text, False, C_DEPTH)
+    outline_surf = _font_title.render(title_text, False, C_OUTLINE)
+    title_surf   = _font_title.render(title_text, False, C_ACCENT)
+    title_rect   = title_surf.get_rect(left=left_x, centery=ty)
 
     # Step 1: stacked purple copies for the 3D block depth (down-right)
     for d in range(DEPTH, 0, -1):
-        dr = depth_surf.get_rect(centerx=cx + d, centery=ty + d)
+        dr = depth_surf.get_rect(left=left_x + d, centery=ty + d)
         screen.blit(depth_surf, dr)
 
     # Step 2: white outline — blit white text in every direction
@@ -825,16 +826,16 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
         for oy in range(-OUTLINE, OUTLINE + 1):
             if ox == 0 and oy == 0:
                 continue
-            or_ = outline_surf.get_rect(centerx=cx + ox, centery=ty + oy)
+            or_ = outline_surf.get_rect(left=left_x + ox, centery=ty + oy)
             screen.blit(outline_surf, or_)
 
     # Step 3: neon magenta fill on top — use GothicByte for eerie horror look
     screen.blit(title_surf, title_rect)
 
-    # ── Separator lines ────────────────────────────────────────────────────
+    # ── Separator line ─────────────────────────────────────────────────────
     sep_y = title_rect.bottom + 20
-    pygame.draw.line(screen, C_ACCENT, (cx - 280, sep_y), (cx - 50, sep_y), 2)
-    pygame.draw.line(screen, C_ACCENT, (cx + 50,  sep_y), (cx + 280, sep_y), 2)
+    # Single long line starting from left margin
+    pygame.draw.line(screen, C_ACCENT, (left_x, sep_y), (left_x + 500, sep_y), 2)
 
     # ── Menu items ─────────────────────────────────────────────────────────
     item_y0      = sep_y + 60
@@ -845,19 +846,21 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
         color  = C_WHITE if is_sel else C_DIM
         iy     = item_y0 + i * item_spacing
 
-        display_label = f"> {label} <" if is_sel else label
+        display_label = f"> {label}" if is_sel else label
         item_s = _font_lg.render(display_label, False, color)
         item_w = item_s.get_width()
         item_h = item_s.get_height()
 
         if is_sel:
-            box = pygame.Rect(cx - item_w // 2 - 32, iy - item_h // 2 - 8,
-                              item_w + 64, item_h + 16)
+            # Selection box anchored to the left
+            box = pygame.Rect(left_x - 16, iy - item_h // 2 - 8,
+                              item_w + 48, item_h + 16)
             pygame.draw.rect(screen, (25, 2, 14), box)
             pygame.draw.rect(screen, C_ACCENT, box, 2)
 
-        screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
-        _menu_rects.append(item_s.get_rect(centerx=cx, centery=iy).inflate(40, 20))
+        item_rect = item_s.get_rect(left=left_x, centery=iy)
+        screen.blit(item_s, item_rect)
+        _menu_rects.append(item_rect.inflate(40, 20))
 
 
 
