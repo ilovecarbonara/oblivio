@@ -390,50 +390,69 @@ def draw_transition(screen: pygame.Surface) -> None:
 
 def draw_danger_vignette(screen: pygame.Surface, hp: float, frame: int) -> None:
     """
-    Draw a pulsing gradient vignette on screen edges when HP is low.
-    - 30 < hp ≤ 50: slow pulse, moderate intensity
-    - hp ≤ 30:      fast, intense pulse matching the fast heartbeat
-
-    Uses 22 concentric gradient bands drawn outer→inner so the center
-    is progressively overwritten with lower alpha, creating a smooth
-    edge-glow that fades to transparent at the screen centre.
+    Draw a pulsing triangular vignette on screen edges when HP is low.
+    Intensity and pulse speed increase smoothly as HP drops from 50 to 0.
+    The center remains clear to maintain visibility.
     """
     if hp > 50:
         return
 
     w, h = screen.get_size()
 
-    if hp <= 30:
-        speed     = 0.17
-        max_alpha = 200
-    else:
-        speed     = 0.07
-        max_alpha = 120
+    # Smooth HP interpolation (50 -> 0)
+    hp_factor = max(0.0, min(1.0, (50.0 - hp) / 50.0))
+    
+    # Gradually intensify speed and alpha
+    # Increased alpha slightly since it's now restricted to the corners
+    speed     = 0.04 + 0.12 * hp_factor
+    max_alpha = 50 + 150 * hp_factor
 
     t     = (frame * speed) % (2 * math.pi)
-    pulse = (math.sin(t) + 1) / 2          # 0.0 → 1.0
+    pulse = (math.sin(t) + 1) / 2
     base_alpha = int(max_alpha * pulse)
 
     if base_alpha <= 0:
         return
 
-    vsurf   = pygame.Surface((w, h), pygame.SRCALPHA)
-    bands   = 22
-    depth_x = w // 4    # how far the glow extends inward horizontally
-    depth_y = h // 4    # how far the glow extends inward vertically
+    # Create the vignette surface (solid pulsing red)
+    vsurf = pygame.Surface((w, h), pygame.SRCALPHA)
+    vsurf.fill((160, 0, 0, base_alpha))
+    
+    # Create a mask to isolate ONLY the four corners
+    mask = pygame.Surface((w, h), pygame.SRCALPHA)
+    mask.fill((0, 0, 0, 0)) # Start fully transparent
+    
+    # Configuration for corner glows
+    # corner_r: how far the glow extends from each corner
+    corner_r = int(min(w, h) * 0.45) 
+    corners = [(0, 0), (w, 0), (0, h), (w, h)]
+    bands = 32
+    
+    for cx, cy in corners:
+        # Directional multipliers for triangle vertices
+        dx = 1 if cx == 0 else -1
+        dy = 1 if cy == 0 else -1
+        
+        # Draw nested triangles from OUTER (low alpha) to INNER (high alpha)
+        for i in range(1, bands + 1):
+            t = i / bands
+            # Triangle size decreases as we move toward the corner tip
+            r = int(corner_r * (1.0 - t + 1.0/bands))
+            # Alpha increases as we get closer to the corner tip
+            alpha = int(255 * (t ** 1.5))
+            
+            pts = [
+                (cx, cy),
+                (cx + dx * r, cy),
+                (cx, cy + dy * r)
+            ]
+            pygame.draw.polygon(mask, (255, 255, 255, alpha), pts)
 
-    # Outer → inner: outermost rect drawn first (high alpha).
-    # Each subsequent smaller rect overwrites the centre with lower alpha
-    # so the gradient naturally fades toward the middle.
-    for i in range(1, bands + 1):
-        t_b = 1.0 - i / bands                   # 1.0 (outermost) → ~0 (innermost)
-        a   = int(base_alpha * t_b ** 1.8)       # power curve: dark at edge, clears fast
-        ix  = int(depth_x * i / bands)
-        iy  = int(depth_y * i / bands)
-        pygame.draw.rect(vsurf, (190, 0, 0, a),
-                         pygame.Rect(ix, iy, w - ix * 2, h - iy * 2))
-
+    # Use BLEND_RGBA_MULT to only keep the corners of the red surface
+    vsurf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    
     screen.blit(vsurf, (0, 0))
+
 
 
 # ---------------------------------------------------------------------------
