@@ -739,7 +739,7 @@ def draw_perfection_popup(screen: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 # Main Menu
 # ---------------------------------------------------------------------------
-MENU_ITEMS = ["PLAY", "OPTIONS", "QUIT"]
+MENU_ITEMS = ["BEGIN THE RECLAMATION", "ATTUNE SENSES", "EMBRACE OBLIVION"]
 _menu_rects: list[pygame.Rect] = []
 
 def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
@@ -1249,7 +1249,7 @@ def draw_esc_hint(screen: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 # Pause overlay  —  drawn ON TOP of the frozen game frame
 # ---------------------------------------------------------------------------
-PAUSE_ITEMS = ["RESUME", "RESTART", "OPTIONS", "QUIT"]
+PAUSE_ITEMS = ["CONTINUE", "RESTART", "ATTUNE SENSES", "SURRENDER"]
 _pause_rects: list[pygame.Rect] = []
 
 def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> None:
@@ -1400,8 +1400,8 @@ def draw_options_menu(
 
     # ── Title ───────────────────────────────────────────────────────────
     title_font = get_gothic_font(48)
-    title_surf = title_font.render("OPTIONS", False, C_WHITE)
-    shadow_surf = title_font.render("OPTIONS", False, C_ACCENT_DK)
+    title_surf = title_font.render("SENSES", False, C_WHITE)
+    shadow_surf = title_font.render("SENSES", False, C_ACCENT_DK)
     title_rect = title_surf.get_rect(centerx=cx, centery=80)
     screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
     screen.blit(title_surf, title_rect)
@@ -1506,7 +1506,7 @@ def update_result_anim(dt_ms: float) -> None:
     global _result_anim_timer
     _result_anim_timer += dt_ms
 
-RESULT_ITEMS = ["PLAY AGAIN", "MAIN MENU"]
+RESULT_ITEMS = ["SEEK REMEMBRANCE", "ABANDON THE LIGHT"]
 _result_rects: list[pygame.Rect] = []
 
 def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_num: int, selected: int, frame: int) -> None:

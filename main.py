@@ -521,7 +521,7 @@ def main() -> None:
 
                 # --- Game Over ---
                 elif game.state == GameState.GAME_OVER and not ui.is_transition_active():
-                    if result_selected == 0:       # PLAY AGAIN
+                    if result_selected == 0:       # SEEK REMEMBRANCE
                         audio.sfx_select()
                         _diff_ga = game.difficulty
                         def _play_again_cb():
@@ -538,7 +538,7 @@ def main() -> None:
                                 audio.bgm_play_game(_diff_ga.label)
                             print(f"[INFO] Restarted — difficulty: {_diff_ga.label} ({_diff_ga.cols}×{_diff_ga.rows})")
                         ui.start_transition(_play_again_cb)
-                    else:                          # MAIN MENU
+                    else:                          # ABANDON THE LIGHT
                         audio.sfx_select()
                         def _to_menu_cb():
                             nonlocal cursor_pos
