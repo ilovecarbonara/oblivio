@@ -784,6 +784,8 @@ def draw_perfection_popup(screen: pygame.Surface) -> None:
 # Main Menu
 # ---------------------------------------------------------------------------
 _menu_rects: list[pygame.Rect] = []
+_codex_rects: list[pygame.Rect] = []
+_suit_rects: list[pygame.Rect] = []
 
 def get_menu_items() -> list[str]:
     return get_ui_label("menu_items")
@@ -1998,18 +2000,61 @@ def get_options_rect(row: int) -> pygame.Rect | None:
 # ---------------------------------------------------------------------------
 _codex_rects: list[pygame.Rect] = []
 
+_codex_anim_p: float = 0.0 # 0.0 = fan, 1.0 = center
+_codex_anim_card: tuple[str, str] | None = None
+_codex_anim_idx: int = -1
+_CODEX_ANIM_MS = 350.0 # speed of transition
+_codex_suit_hovers: list[float] = [0.0, 0.0, 0.0, 0.0]
+_codex_fan_hovers: list[float] = [0.0] * 13
+
+def update_codex_transitions(dt_ms: float, revealed_card: tuple[str, str] | None, selected_idx: int, view_mode: int = 0, suit_idx: int = 0) -> None:
+    """Drive the codex animation progress based on whether a card is revealed."""
+    global _codex_anim_p, _codex_anim_card, _codex_anim_idx, _codex_suit_hovers, _codex_fan_hovers
+    
+    if revealed_card:
+        if _codex_anim_card != revealed_card:
+            # New card revealed
+            _codex_anim_card = revealed_card
+            _codex_anim_idx = selected_idx
+            
+        _codex_anim_p = min(1.0, _codex_anim_p + dt_ms / _CODEX_ANIM_MS)
+    else:
+        _codex_anim_p = max(0.0, _codex_anim_p - dt_ms / _CODEX_ANIM_MS)
+        if _codex_anim_p <= 0:
+            _codex_anim_card = None
+            _codex_anim_idx = -1
+
+    # Update suit hovers
+    for i in range(4):
+        target = 1.0 if (view_mode == 0 and suit_idx == i) else 0.0
+        if _codex_suit_hovers[i] < target:
+            _codex_suit_hovers[i] = min(target, _codex_suit_hovers[i] + dt_ms / 120.0)
+        else:
+            _codex_suit_hovers[i] = max(target, _codex_suit_hovers[i] - dt_ms / 120.0)
+
+    # Update fan hovers
+    for i in range(13):
+        target = 1.0 if (view_mode == 1 and not revealed_card and selected_idx == i) else 0.0
+        if _codex_fan_hovers[i] < target:
+            _codex_fan_hovers[i] = min(target, _codex_fan_hovers[i] + dt_ms / 100.0)
+        else:
+            _codex_fan_hovers[i] = max(target, _codex_fan_hovers[i] - dt_ms / 100.0)
+
 def draw_codex(
     screen: pygame.Surface,
+    view_mode: int, # 0=Decks, 1=Fan
+    suit_idx: int,
     selected_idx: int,
     revealed_card: tuple[str, str] | None,
     frame: int
 ) -> None:
     """
-    Display all 52 cards in a grid.
-    If a card is clicked (revealed_card), show its lore.
+    Display 13 cards of a selected suit in a fan-shape at the bottom.
+    Includes a suit selector at the top.
     """
-    global _codex_rects
+    global _codex_rects, _suit_rects
     _codex_rects.clear()
+    _suit_rects.clear()
     
     c = get_canvas()
     draw_creepy_void(c, frame)
@@ -2017,6 +2062,10 @@ def draw_codex(
     
     w, h = screen.get_size()
     cx = w // 2
+    
+    if view_mode == 0:
+        _draw_codex_suit_select(screen, suit_idx, frame)
+        return
     
     # Dual scale factors
     sc_w = w / 1024.0
@@ -2031,123 +2080,265 @@ def draw_codex(
     screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_w)))
     screen.blit(title_surf, title_rect)
     
-    # Separator
-    sep_y = title_rect.bottom + int(10 * sc_h)
-    pygame.draw.line(screen, C_ACCENT, (cx - int(300 * sc_w), sep_y), (cx + int(300 * sc_w), sep_y), max(1, int(2 * sc_w)))
-    
-    # Card Grid
-    # 13 ranks, 4 suits
+    # Suit Label (instead of selector)
     suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
-    ranks = _RANKS
+    suit_name = suits[suit_idx]
+    suit_font = get_gothic_font(int(28 * sc_w))
+    s_surf = suit_font.render(suit_name.upper(), False, C_WHITE)
+    s_rect = s_surf.get_rect(centerx=cx, centery=title_rect.bottom + int(40 * sc_h))
+    screen.blit(s_surf, s_rect)
     
-    # Cards should scale primarily by width to look big, but we check height too
-    card_sc = sc_w
-    card_w = int(46 * card_sc)
-    card_h = int(70 * card_sc)
-    padding = int(8 * card_sc)
-    
-    grid_w = 13 * card_w + 12 * padding
-    grid_h = 4 * card_h + 3 * padding
-    
-    start_x = (w - grid_w) // 2
-    start_y = sep_y + int(40 * sc_h)
-    
-    for s_idx, suit in enumerate(suits):
-        for r_idx, rank in enumerate(ranks):
-            idx = s_idx * 13 + r_idx
-            is_sel = (idx == selected_idx)
-            
-            px = start_x + r_idx * (card_w + padding)
-            py = start_y + s_idx * (card_h + padding)
-            
-            rect = pygame.Rect(px, py, card_w, card_h)
-            _codex_rects.append(rect)
-            
-            src = get_card_surf(suit, rank)
-            if src:
-                scaled = pygame.transform.scale(src, (card_w, card_h))
-                
-                # Darken if not selected and something is revealed
-                if revealed_card and (suit, rank) != revealed_card:
-                    dark = pygame.Surface(scaled.get_size(), pygame.SRCALPHA)
-                    dark.fill((0, 0, 0, 150))
-                    scaled.blit(dark, (0, 0))
-                
-                screen.blit(scaled, (px, py))
-            
-            if is_sel:
-                pygame.draw.rect(screen, C_WHITE, rect.inflate(int(4 * sc_w), int(4 * sc_h)), max(1, int(2 * sc_w)), border_radius=int(3 * sc_w))
-                t_pulse = (pygame.time.get_ticks() % 600) / 600.0
-                alpha = int(100 + 100 * math.sin(t_pulse * math.pi))
-                glow_rect = rect.inflate(int(8 * sc_w), int(8 * sc_h))
-                glow = pygame.Surface(glow_rect.size, pygame.SRCALPHA)
-                pygame.draw.rect(glow, (*C_ACCENT, alpha), glow.get_rect(), border_radius=int(4 * sc_w))
-                screen.blit(glow, (rect.x - int(4 * sc_w), rect.y - int(4 * sc_h)))
+    # Static accent line below suit name
+    line_y = s_rect.bottom + int(5 * sc_h)
+    pygame.draw.line(screen, C_ACCENT, (s_rect.left - 20, line_y), (s_rect.right + 20, line_y), max(1, int(2 * sc_w)))
 
-    # Lore Overlay
-    if revealed_card:
-        suit, rank = revealed_card
-        l_text = lore.get_lore(suit, rank)
+    # Fan Layout Parameters
+    # We want the cards to fan out from the bottom center.
+    fan_cx = w // 2
+    fan_cy = h + int(150 * sc_h) # center below screen
+    radius = int(500 * sc_h)
+    arc_spread = math.radians(60) # total spread of the fan
+    
+    ranks = _RANKS
+    suit = suits[suit_idx]
+    
+    card_w = int(90 * sc_w)
+    card_h = int(140 * sc_w)
+    
+    for i, rank in enumerate(ranks):
+        is_sel = (i == selected_idx)
         
-        # Dim background further
-        dim = pygame.Surface((w, h), pygame.SRCALPHA)
-        dim.fill((0, 0, 0, 180))
-        screen.blit(dim, (0, 0))
+        # Don't draw the card in the fan if it's the one transitioning/focused
+        is_animating = (_codex_anim_idx == i and _codex_anim_p > 0)
+        if is_animating and not revealed_card and _codex_anim_p > 0.99:
+             # edge case: if we just closed but p is still 1.0, hide it
+             pass
+        elif is_animating:
+            continue
+
+        # Angle calculation
+        angle_offset = (i - 6) * (arc_spread / 12) # -30 to +30 degrees
+        angle = -math.pi/2 + angle_offset
         
-        # Show large card
-        large_w = int(138 * sc_w)
-        large_h = int(210 * sc_w)
+        # Base position
+        px = fan_cx + radius * math.cos(angle)
+        py = fan_cy + radius * math.sin(angle)
+        
+        # Hover effect (Smooth)
+        fan_lift_p = _codex_fan_hovers[i]
+        ext_radius = radius + int(60 * sc_h * fan_lift_p)
+        px = fan_cx + ext_radius * math.cos(angle)
+        py = fan_cy + ext_radius * math.sin(angle)
+            
+        # Rotation
+        rot_deg = -math.degrees(angle_offset)
+        
         src = get_card_surf(suit, rank)
         if src:
-            l_card = pygame.transform.scale(src, (large_w, large_h))
-            lc_rect = l_card.get_rect(centerx=cx, centery=h // 2 - int(40 * sc_h))
+            scaled = pygame.transform.scale(src, (card_w, card_h))
+            rotated = pygame.transform.rotate(scaled, rot_deg)
             
+            # Darken if any card is revealed/animating
+            # We use _codex_anim_p to dim the fan
+            if (revealed_card or _codex_anim_p > 0):
+                dark = pygame.Surface(rotated.get_size(), pygame.SRCALPHA)
+                dark.fill((0, 0, 0, int(150 * _codex_anim_p)))
+                rotated.blit(dark, (0, 0))
+                
+            r_rect = rotated.get_rect(center=(px, py))
+            _codex_rects.append(r_rect)
+            
+            screen.blit(rotated, r_rect)
+
+    # Transitioning / Focused Card
+    if _codex_anim_p > 0 and _codex_anim_card:
+        asuit, arank = _codex_anim_card
+        
+        # Start (Fan) position
+        angle_offset = (_codex_anim_idx - 6) * (arc_spread / 12)
+        angle = -math.pi/2 + angle_offset
+        start_x = fan_cx + radius * math.cos(angle)
+        start_y = fan_cy + radius * math.sin(angle)
+        start_rot = -math.degrees(angle_offset)
+        
+        # End (Center) position
+        end_x = cx
+        end_y = h // 2 - int(40 * sc_h)
+        end_rot = 0
+        
+        # Lerp
+        t = _codex_anim_p
+        # Smooth step for better feel
+        t_smooth = t * t * (3 - 2 * t)
+        
+        cur_x = start_x + (end_x - start_x) * t_smooth
+        cur_y = start_y + (end_y - start_y) * t_smooth
+        cur_rot = start_rot + (end_rot - start_rot) * t_smooth
+        
+        # Scale lerp
+        large_w = int(138 * sc_w)
+        large_h = int(210 * sc_w)
+        cur_w = int(card_w + (large_w - card_w) * t_smooth)
+        cur_h = int(card_h + (large_h - card_h) * t_smooth)
+        
+        src = get_card_surf(asuit, arank)
+        if src:
+            l_card = pygame.transform.scale(src, (cur_w, cur_h))
+            rotated = pygame.transform.rotate(l_card, cur_rot)
+            lc_rect = rotated.get_rect(center=(cur_x, cur_y))
+            
+            # Dim background further (only if p > 0)
+            if _codex_anim_p > 0:
+                dim = pygame.Surface((w, h), pygame.SRCALPHA)
+                dim.fill((0, 0, 0, int(180 * _codex_anim_p)))
+                screen.blit(dim, (0, 0))
+
             # Shadow/Glow
+            glow_alpha = int(80 * _codex_anim_p)
             glow_r = lc_rect.inflate(int(20 * sc_w), int(20 * sc_h))
             glow_s = pygame.Surface(glow_r.size, pygame.SRCALPHA)
-            pygame.draw.rect(glow_s, (*C_ACCENT, 80), glow_s.get_rect(), border_radius=int(10 * sc_w))
+            pygame.draw.rect(glow_s, (*C_ACCENT, glow_alpha), glow_s.get_rect(), border_radius=int(10 * sc_w))
             screen.blit(glow_s, glow_r)
             
-            screen.blit(l_card, lc_rect)
+            screen.blit(rotated, lc_rect)
             
-            # Title of card
-            name_font = get_gothic_font(int(32 * sc_w))
-            name_text = lore.get_title(suit, rank)
-            name_surf = name_font.render(name_text, False, C_WHITE)
-            screen.blit(name_surf, name_surf.get_rect(centerx=cx, top=lc_rect.bottom + int(20 * sc_h)))
-            
-            # Lore text
-            lore_font = get_gothic_font(int(20 * sc_w))
-            # Simple text wrapping
-            wrap_width = int(600 * sc_w)
-            words = l_text.split()
-            lines = []
-            cur_line = ""
-            for word in words:
-                test_line = cur_line + " " + word if cur_line else word
-                if lore_font.size(test_line)[0] < wrap_width:
-                    cur_line = test_line
-                else:
-                    lines.append(cur_line)
-                    cur_line = word
-            lines.append(cur_line)
-            
-            ly = lc_rect.bottom + int(70 * sc_h)
-            for line in lines:
-                ls = lore_font.render(line, False, C_DIM)
-                screen.blit(ls, ls.get_rect(centerx=cx, top=ly))
-                ly += int(25 * sc_h)
-        
-        # Instruction to close
-        hint_font = get_gothic_font(int(18 * sc_w))
-        hint_text = "Press SPACE or ESC to close"
-        hint_surf = hint_font.render(hint_text, False, C_ACCENT)
-        screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
+            # Lore Overlay (Fades in when p > 0.5)
+            if _codex_anim_p > 0.5:
+                lore_t = (_codex_anim_p - 0.5) / 0.5
+                lore_alpha = int(255 * lore_t)
+                
+                # Title
+                name_font = get_gothic_font(int(32 * sc_w))
+                name_text = lore.get_title(asuit, arank)
+                name_surf = name_font.render(name_text, False, C_WHITE)
+                name_surf.set_alpha(lore_alpha)
+                # Position relative to final center, but maybe offset slightly if animating?
+                # Let's keep it fixed at the end position for stability
+                screen.blit(name_surf, name_surf.get_rect(centerx=cx, top=end_y + large_h // 2 + int(20 * sc_h)))
+                
+                # Lore text
+                l_text = lore.get_lore(asuit, arank)
+                lore_font = get_gothic_font(int(20 * sc_w))
+                wrap_width = int(600 * sc_w)
+                words = l_text.split()
+                lines = []
+                cur_line = ""
+                for word in words:
+                    test_line = cur_line + " " + word if cur_line else word
+                    if lore_font.size(test_line)[0] < wrap_width:
+                        cur_line = test_line
+                    else:
+                        lines.append(cur_line)
+                        cur_line = word
+                lines.append(cur_line)
+                
+                ly = end_y + large_h // 2 + int(70 * sc_h)
+                for line in lines:
+                    ls = lore_font.render(line, False, C_DIM)
+                    ls.set_alpha(lore_alpha)
+                    screen.blit(ls, ls.get_rect(centerx=cx, top=ly))
+                    ly += int(25 * sc_h)
 
-def get_hovered_codex_item(mx: int, my: int) -> int | None:
+                # Instruction to close
+                hint_font = get_gothic_font(int(18 * sc_w))
+                hint_text = "Press SPACE or ESC to close"
+                hint_surf = hint_font.render(hint_text, False, C_ACCENT)
+                hint_surf.set_alpha(lore_alpha)
+                screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
+
+    # Back Hint (only if not revealed)
+    if not revealed_card and _codex_anim_p == 0:
+        hint_font = get_gothic_font(int(16 * sc_w))
+        hint_text = "Press ESC to return to suits"
+        hint_surf = hint_font.render(hint_text, False, C_DIM)
+        screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(20 * sc_h)))
+
+
+def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: int) -> None:
+    """Draw 4 stacks of cards, one for each suit."""
+    global _codex_rects, _suit_rects
+    _codex_rects.clear()
+    _suit_rects.clear()
+
+    c = get_canvas()
+    draw_creepy_void(c, frame)
+    blit_canvas_to_screen(screen)
+
+    w, h = screen.get_size()
+    cx = w // 2
+    sc_w = w / 1024.0
+    sc_h = h / 768.0
+
+    # Title
+    title_font = get_gothic_font(int(48 * sc_w))
+    title_text = get_ui_label("codex_title")
+    title_surf = title_font.render(title_text, False, C_WHITE)
+    title_rect = title_surf.get_rect(centerx=cx, centery=int(100 * sc_h))
+    screen.blit(title_surf, title_rect)
+
+    # Decks
+    suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
+    deck_w = int(120 * sc_w)
+    deck_h = int(180 * sc_w)
+    spacing = int(220 * sc_w)
+    start_x = cx - (spacing * 1.5)
+
+    for i, suit in enumerate(suits):
+        is_sel = (i == selected_suit)
+        dx = start_x + i * spacing
+        dy = h // 2
+        
+        rect = pygame.Rect(0, 0, deck_w, deck_h)
+        rect.center = (dx, dy)
+        _suit_rects.append(rect) # for click detection
+        
+        # Hover lift (Smooth)
+        lift_p = _codex_suit_hovers[i]
+        dy -= int(20 * sc_h * lift_p)
+            
+        # Draw stack (3 cards)
+        for offset in range(3, 0, -1):
+            ox = dx + offset * int(3 * sc_w)
+            oy = dy + offset * int(3 * sc_w)
+            
+            back = get_back_surf()
+            if back:
+                b_scaled = pygame.transform.scale(back, (deck_w, deck_h))
+                screen.blit(b_scaled, b_scaled.get_rect(center=(ox, oy)))
+        
+        # Top card (Ace)
+        ace_surf = get_card_surf(suit, "A")
+        if ace_surf:
+            a_scaled = pygame.transform.scale(ace_surf, (deck_w, deck_h))
+            screen.blit(a_scaled, a_scaled.get_rect(center=(dx, dy)))
+            
+        # Highlight border removed as requested (redundant with hover lift)
+            
+        # Suit Label
+        label_font = get_gothic_font(int(24 * sc_w))
+        # Label color also transitions
+        t_c = (
+            int(C_DIM[0] + (C_WHITE[0] - C_DIM[0]) * lift_p),
+            int(C_DIM[1] + (C_WHITE[1] - C_DIM[1]) * lift_p),
+            int(C_DIM[2] + (C_WHITE[2] - C_DIM[2]) * lift_p)
+        )
+        l_surf = label_font.render(suit.upper(), False, t_c)
+        screen.blit(l_surf, l_surf.get_rect(centerx=dx, top=dy + deck_h // 2 + int(30 * sc_h)))
+
+    # Hint
+    hint_font = get_gothic_font(int(18 * sc_w))
+    hint_text = "Select a suit to view registry"
+    hint_surf = hint_font.render(hint_text, False, C_ACCENT)
+    screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
+
+def get_hovered_codex_item(mx: int, my: int) -> tuple[str, int] | None:
+    """Returns ('suit', idx) or ('card', idx) or None."""
+    for i, r in enumerate(_suit_rects):
+        if r.collidepoint(mx, my):
+            return ("suit", i)
     for i, r in enumerate(_codex_rects):
         if r.collidepoint(mx, my):
-            return i
+            return ("card", i)
     return None
 
 
