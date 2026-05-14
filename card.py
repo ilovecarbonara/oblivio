@@ -20,7 +20,7 @@ class CardState(Enum):
 
 
 # The four suits in a standard deck.
-SUITS = ("Hearts", "Diamonds", "Clubs", "Spades")
+SUITS = ("Grafted", "Arcanum", "Hollow", "Sundered")
 
 # The thirteen ranks in a standard deck.
 RANKS = ("A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K")
@@ -33,7 +33,7 @@ class Card:
     Attributes
     ----------
     suit : str
-        One of the four suits ("Hearts", "Diamonds", "Clubs", "Spades").
+        One of the four suits ("Grafted", "Arcanum", "Hollow", "Sundered").
     rank : str
         One of the thirteen ranks ("A", "2"–"10", "J", "Q", "K").
     state : CardState

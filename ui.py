@@ -16,6 +16,7 @@ Owner: Jim (visuals / UI)
 import os
 import math
 import pygame
+import lore
 
 # ---------------------------------------------------------------------------
 # Internal (low-res) canvas size and upscale factor
@@ -57,29 +58,33 @@ C_OVERHEAL  = ( 60, 140, 255)   # #3C8CFF overheal blue
 # ---------------------------------------------------------------------------
 
 _NORMAL_LABELS = {
-    "menu_items": ["PLAY", "OPTIONS", "QUIT"],
+    "menu_items": ["PLAY", "CODEX", "OPTIONS", "QUIT"],
     "pause_items": ["CONTINUE", "RESTART", "OPTIONS", "QUIT"],
     "pause_title": "PAUSED",
     "options_title": "SETTINGS",
+    "codex_title": "CODEX",
     "result_title": "GAME OVER",
     "result_items": ["PLAY AGAIN", "MAIN MENU"],
     "difficulty_items": ["Easy", "Medium", "Hard", "Back"],
     "perfection_title": "PERFECT",
     "overheal_label": "+50 HP OVERHEAL",
     "pause_btn": "PAUSE",
+    "difficulty_title": "CHOOSE YOUR FATE",
 }
 
 _DARK_LABELS = {
-    "menu_items": ["BEGIN THE RECLAMATION", "ATTUNE SENSES", "EMBRACE OBLIVION"],
+    "menu_items": ["BEGIN THE RECLAMATION", "REGISTRY OF THE LOST", "ATTUNE SENSES", "EMBRACE OBLIVION"],
     "pause_items": ["PERSIST", "REKINDLE", "ATTUNE SENSES", "SURRENDER"],
     "pause_title": "STASIS",
     "options_title": "SENSES",
+    "codex_title": "REGISTRY",
     "result_title": "ALL IS FORGOTTEN",
     "result_items": ["SEEK REMEMBRANCE", "ABANDON THE LIGHT"],
     "difficulty_items": ["Mortal", "Scorched", "Hellish", "Back"],
     "perfection_title": "PERFECTION",
     "overheal_label": "+50 HP OVERHEAL",
     "pause_btn": "STASIS",
+    "difficulty_title": "THE WILL TO PERSIST",
 }
 
 def get_ui_label(key: str, override_mode: int = None) -> any:
@@ -283,13 +288,13 @@ def _tick_grace() -> None:
 # Card size: 23x35 px, with 1px transparent gap (stride is 24x36).
 # 
 # Rows (based on visual icons):
-# 0: Spades (Red Sword)
-# 1: Clubs (White Skull)
-# 2: Diamonds (White Spark)
-# 3: Hearts (Red Shield)
+# 0: Sundered (Red Sword)
+# 1: Hollow (White Skull)
+# 2: Arcanum (White Spark)
+# 3: Grafted (Red Shield)
 # ---------------------------------------------------------------------------
 _RANKS      = ("A","2","3","4","5","6","7","8","9","10","J","Q","K")
-_SUIT_ROW   = {"Spades": 0, "Clubs": 1, "Diamonds": 2, "Hearts": 3}
+_SUIT_ROW   = {"Sundered": 0, "Hollow": 1, "Arcanum": 2, "Grafted": 3}
 
 _card_sprites: dict[str, pygame.Surface] = {}
 _joker_sprites: list[pygame.Surface] = []
@@ -1666,20 +1671,30 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_n
     ty = h // 2 - 180   # Centered vertically
 
     # ── Title ───────────────────────────────────────────────────────────
+    import settings
+    is_dark = settings.language_mode != 0
+    
     label = get_ui_label("result_title")
     color = C_ACCENT
 
+    # Dynamic scaling for long titles
+    base_size = 64 if is_dark else 80
+    scale_factor = w / 1024.0
+    
+    scaled_size = int(base_size * scale_factor)
+    title_f = get_gothic_font(scaled_size)
+
     C_DEPTH   = (45, 10, 90)
     C_OUTLINE = (255, 255, 255)
-    DEPTH     = 10
-    OUTLINE   = 3
+    DEPTH     = int(10 * scale_factor)
+    OUTLINE   = int(3 * scale_factor)
 
     if title_alpha > 0:
-        depth_surf   = _font_title.render(label, False, C_DEPTH)
+        depth_surf   = title_f.render(label, False, C_DEPTH)
         depth_surf.set_alpha(title_alpha)
-        outline_surf = _font_title.render(label, False, C_OUTLINE)
+        outline_surf = title_f.render(label, False, C_OUTLINE)
         outline_surf.set_alpha(title_alpha)
-        title_surf   = _font_title.render(label, False, color)
+        title_surf   = title_f.render(label, False, color)
         title_surf.set_alpha(title_alpha)
         title_rect   = title_surf.get_rect(centerx=cx, centery=ty)
 
@@ -1778,17 +1793,27 @@ def draw_difficulty_select(screen: pygame.Surface, selected: int, frame: int) ->
     ty = h // 2 - 140
 
     # ── Title ───────────────────────────────────────────────────────────
-    label = "DIFFICULTY"
+    import settings
+    is_dark = settings.language_mode != 0
+    
+    label = get_ui_label("difficulty_title")
     color = C_ACCENT
+
+    # Dynamic scaling for long titles
+    base_size = 64 if is_dark else 80
+    scale_factor = w / 1024.0
+    
+    scaled_size = int(base_size * scale_factor)
+    title_f = get_gothic_font(scaled_size)
 
     C_DEPTH   = (45, 10, 90)
     C_OUTLINE = (255, 255, 255)
-    DEPTH     = 10
-    OUTLINE   = 3
+    DEPTH     = int(10 * scale_factor)
+    OUTLINE   = int(3 * scale_factor)
 
-    depth_surf   = _font_title.render(label, False, C_DEPTH)
-    outline_surf = _font_title.render(label, False, C_OUTLINE)
-    title_surf   = _font_title.render(label, False, color)
+    depth_surf   = title_f.render(label, False, C_DEPTH)
+    outline_surf = title_f.render(label, False, C_OUTLINE)
+    title_surf   = title_f.render(label, False, color)
     title_rect   = title_surf.get_rect(centerx=cx, centery=ty)
 
     for d in range(DEPTH, 0, -1):
@@ -1955,6 +1980,154 @@ def get_hovered_powerup_item(mx: int, my: int) -> int | None:
 def get_options_rect(row: int) -> pygame.Rect | None:
     if 0 <= row < len(_options_rects):
         return _options_rects[row]
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Codex Screen
+# ---------------------------------------------------------------------------
+_codex_rects: list[pygame.Rect] = []
+
+def draw_codex(
+    screen: pygame.Surface,
+    selected_idx: int,
+    revealed_card: tuple[str, str] | None,
+    frame: int
+) -> None:
+    """
+    Display all 52 cards in a grid.
+    If a card is clicked (revealed_card), show its lore.
+    """
+    global _codex_rects
+    _codex_rects.clear()
+    
+    c = get_canvas()
+    draw_creepy_void(c, frame)
+    blit_canvas_to_screen(screen)
+    
+    w, h = screen.get_size()
+    cx = w // 2
+    
+    # Title
+    title_font = get_gothic_font(48)
+    title_text = get_ui_label("codex_title")
+    title_surf = title_font.render(title_text, False, C_WHITE)
+    shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
+    title_rect = title_surf.get_rect(centerx=cx, centery=50)
+    screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
+    screen.blit(title_surf, title_rect)
+    
+    # Separator
+    sep_y = title_rect.bottom + 10
+    pygame.draw.line(screen, C_ACCENT, (cx - 300, sep_y), (cx + 300, sep_y), 2)
+    
+    # Card Grid
+    # 13 ranks, 4 suits
+    suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
+    ranks = _RANKS
+    
+    card_w, card_h = 46, 70  # Smaller for codex
+    padding = 8
+    
+    grid_w = 13 * card_w + 12 * padding
+    grid_h = 4 * card_h + 3 * padding
+    
+    start_x = (w - grid_w) // 2
+    start_y = sep_y + 40
+    
+    for s_idx, suit in enumerate(suits):
+        for r_idx, rank in enumerate(ranks):
+            idx = s_idx * 13 + r_idx
+            is_sel = (idx == selected_idx)
+            
+            px = start_x + r_idx * (card_w + padding)
+            py = start_y + s_idx * (card_h + padding)
+            
+            rect = pygame.Rect(px, py, card_w, card_h)
+            _codex_rects.append(rect)
+            
+            src = get_card_surf(suit, rank)
+            if src:
+                scaled = pygame.transform.scale(src, (card_w, card_h))
+                
+                # Darken if not selected and something is revealed
+                if revealed_card and (suit, rank) != revealed_card:
+                    dark = pygame.Surface(scaled.get_size(), pygame.SRCALPHA)
+                    dark.fill((0, 0, 0, 150))
+                    scaled.blit(dark, (0, 0))
+                
+                screen.blit(scaled, (px, py))
+            
+            if is_sel:
+                pygame.draw.rect(screen, C_WHITE, rect.inflate(4, 4), 2, border_radius=3)
+                t_pulse = (pygame.time.get_ticks() % 600) / 600.0
+                alpha = int(100 + 100 * math.sin(t_pulse * math.pi))
+                glow = pygame.Surface(rect.inflate(8, 8).size, pygame.SRCALPHA)
+                pygame.draw.rect(glow, (*C_ACCENT, alpha), glow.get_rect(), border_radius=4)
+                screen.blit(glow, (rect.x - 4, rect.y - 4))
+
+    # Lore Overlay
+    if revealed_card:
+        suit, rank = revealed_card
+        l_text = lore.get_lore(suit, rank)
+        
+        # Dim background further
+        dim = pygame.Surface((w, h), pygame.SRCALPHA)
+        dim.fill((0, 0, 0, 180))
+        screen.blit(dim, (0, 0))
+        
+        # Show large card
+        large_w, large_h = 138, 210
+        src = get_card_surf(suit, rank)
+        if src:
+            l_card = pygame.transform.scale(src, (large_w, large_h))
+            lc_rect = l_card.get_rect(centerx=cx, centery=h // 2 - 40)
+            
+            # Shadow/Glow
+            glow_r = lc_rect.inflate(20, 20)
+            glow_s = pygame.Surface(glow_r.size, pygame.SRCALPHA)
+            pygame.draw.rect(glow_s, (*C_ACCENT, 80), glow_s.get_rect(), border_radius=10)
+            screen.blit(glow_s, glow_r)
+            
+            screen.blit(l_card, lc_rect)
+            
+            # Title of card
+            name_font = get_gothic_font(32)
+            name_text = lore.get_title(suit, rank)
+            name_surf = name_font.render(name_text, False, C_WHITE)
+            screen.blit(name_surf, name_surf.get_rect(centerx=cx, top=lc_rect.bottom + 20))
+            
+            # Lore text
+            lore_font = get_gothic_font(20)
+            # Simple text wrapping
+            words = l_text.split()
+            lines = []
+            cur_line = ""
+            for word in words:
+                test_line = cur_line + " " + word if cur_line else word
+                if lore_font.size(test_line)[0] < 600:
+                    cur_line = test_line
+                else:
+                    lines.append(cur_line)
+                    cur_line = word
+            lines.append(cur_line)
+            
+            ly = lc_rect.bottom + 70
+            for line in lines:
+                ls = lore_font.render(line, False, C_DIM)
+                screen.blit(ls, ls.get_rect(centerx=cx, top=ly))
+                ly += 25
+        
+        # Instruction to close
+        hint_font = get_gothic_font(18)
+        hint_text = "Press SPACE or ESC to close"
+        hint_surf = hint_font.render(hint_text, False, C_ACCENT)
+        screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - 40))
+
+def get_hovered_codex_item(mx: int, my: int) -> int | None:
+    for i, r in enumerate(_codex_rects):
+        if r.collidepoint(mx, my):
+            return i
     return None
 
 
