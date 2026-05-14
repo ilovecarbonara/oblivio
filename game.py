@@ -125,6 +125,10 @@ class Game:
         self.lifesteal_active: bool         = False
         self.has_extra_life  : bool         = False
 
+        # --- New Reward System ---
+        self.successive_matches: int        = 0      # streak for regen rewards
+        self.mistakes_made     : bool       = False  # tracker for perfect round bonus
+
     # ------------------------------------------------------------------
     # State transitions
     # ------------------------------------------------------------------
@@ -156,6 +160,10 @@ class Game:
         self.hp                 = HPBar()
         self.score              = Score()
         self._turn_start_ticks  = 0
+
+        # Reset reward tracking
+        self.successive_matches = 0
+        self.mistakes_made      = False
 
         # Reset power-ups
         self.shield_charges  = 0
@@ -193,6 +201,13 @@ class Game:
 
         # Regeneration for clearing the previous round
         self.hp.heal(25)
+
+        # Perfect Round Reward
+        if not self.mistakes_made:
+            self.hp.add_overheal(50)
+            print(f"[REGEN] Perfect Round! +50 HP overheal bonus. (Current: {self.hp.current_hp})")
+
+        self.mistakes_made = False
         print(f"[REGEN] Round {self.round-1} cleared! +25 HP (Current: {self.hp.current_hp})")
         print(f"[ROUND {self.round}] New board generated — score carries over: {self.score.total}")
 
@@ -219,6 +234,8 @@ class Game:
         self.shield_charges      = 0
         self.lifesteal_active    = False
         self.has_extra_life      = False
+        self.successive_matches  = 0
+        self.mistakes_made       = False
 
     def to_pause(self) -> None:
         """Freeze gameplay and show the pause overlay."""
@@ -345,6 +362,16 @@ class Game:
                 self.hp.heal(5)
                 print(f"[LIFESTEAL] Match found! +5 HP (Current: {self.hp.current_hp})")
 
+            # --- Successive Match Rewards ---
+            self.successive_matches += 1
+            if self.successive_matches == 3:
+                self.hp.add_overheal(10)
+                print(f"[REGEN] 3 successive matches! +10 HP reward. (Current: {self.hp.current_hp})")
+            elif self.successive_matches == 5:
+                self.hp.add_overheal(15)
+                print(f"[REGEN] 5 successive matches! +15 HP reward. (Current: {self.hp.current_hp})")
+                self.successive_matches = 0  # reset to allow the cycle to repeat
+
             return "match"
 
         # Mismatch — lock input, deduct HP, reset streak, start countdown
@@ -360,6 +387,8 @@ class Game:
             )
         
         self.score.reset_streak()
+        self.successive_matches = 0
+        self.mistakes_made      = True
         self.lock_input     = True
         self.mismatch_timer = MISMATCH_DELAY_MS
         return "mismatch"

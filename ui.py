@@ -47,6 +47,7 @@ C_WHITE     = (255, 255, 255)   # title colour — stark and cold
 C_DIM       = (180, 160, 190)   # lighter purple-grey for better readability
 C_MATCH     = (243,   2,  97)   # match glow
 C_MISMATCH  = (210,  40,  40)   # mismatch flash
+C_OVERHEAL  = ( 60, 140, 255)   # #3C8CFF overheal blue
 C_HUD_BG    = (  7,   3,  14)   # HUD strip background
 
 # ---------------------------------------------------------------------------
@@ -941,10 +942,15 @@ def draw_hud(
     bar_display_h = 14
     bar_top_y     = hud_h // 2 - bar_display_h // 2
 
-    fill_w  = max(0, int(bar_display_w * (_hp_drawn / 100.0)))
-    hp_frac = _hp_drawn / 100.0
+    # Split HP into normal and overheal
+    normal_hp   = min(100.0, _hp_drawn)
+    overheal_hp = max(0.0, _hp_drawn - 100.0)
 
-    # Color: magenta (#F30261) at full → deep crimson (#8B0000) at critical
+    normal_fill_w   = max(0, int(bar_display_w * (normal_hp / 100.0)))
+    overheal_fill_w = int(bar_display_w * (overheal_hp / 100.0))
+
+    # Color for normal part: magenta (#F30261) at full → deep crimson (#8B0000) at critical
+    hp_frac = normal_hp / 100.0
     r = int(243 + (139 - 243) * (1.0 - hp_frac))
     g = int(  2 + (  0 -   2) * (1.0 - hp_frac))
     b = int( 97 + (  0 -  97) * (1.0 - hp_frac))
@@ -952,11 +958,18 @@ def draw_hud(
 
     # Track (empty portion)
     pygame.draw.rect(screen, (18, 6, 28), (bar_x, bar_top_y, bar_display_w, bar_display_h), border_radius=3)
-    # Fill
-    if fill_w > 0:
-        pygame.draw.rect(screen, bar_color, (bar_x, bar_top_y, fill_w, bar_display_h), border_radius=3)
-    # Border
-    pygame.draw.rect(screen, C_ACCENT_DK, (bar_x, bar_top_y, bar_display_w, bar_display_h), 1, border_radius=3)
+    
+    # Fill normal
+    if normal_fill_w > 0:
+        pygame.draw.rect(screen, bar_color, (bar_x, bar_top_y, normal_fill_w, bar_display_h), border_radius=3)
+    
+    # Fill overheal (extends beyond the track)
+    if overheal_fill_w > 0:
+        pygame.draw.rect(screen, C_OVERHEAL, (bar_x + bar_display_w, bar_top_y, overheal_fill_w, bar_display_h), border_radius=3)
+
+    # Border (covers the entire visible health)
+    total_w = bar_display_w + overheal_fill_w
+    pygame.draw.rect(screen, C_ACCENT_DK, (bar_x, bar_top_y, total_w, bar_display_h), 1, border_radius=3)
 
     # HP text label above the bar
     label_font = get_gothic_font(14)
