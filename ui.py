@@ -44,7 +44,7 @@ C_SHADOW_3  = ( 18,   3,  30)   # dark indigo fog
 C_ACCENT    = (243,   2,  97)   # #F30261  neon magenta accent
 C_ACCENT_DK = ( 74,   0,  31)   # #4A001F  deep blood-red shadow
 C_WHITE     = (255, 255, 255)   # title colour — stark and cold
-C_DIM       = ( 90,  70, 100)   # muted UI text
+C_DIM       = (180, 160, 190)   # lighter purple-grey for better readability
 C_MATCH     = (243,   2,  97)   # match glow
 C_MISMATCH  = (210,  40,  40)   # mismatch flash
 C_HUD_BG    = (  7,   3,  14)   # HUD strip background
@@ -651,7 +651,7 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     item_spacing = 80
     for i, label in enumerate(MENU_ITEMS):
         is_sel = (i == selected)
-        color  = C_ACCENT if is_sel else C_DIM
+        color  = C_WHITE if is_sel else C_DIM
         iy     = item_y0 + i * item_spacing
 
         display_label = f"> {label} <" if is_sel else label
@@ -1096,7 +1096,7 @@ def draw_pause_overlay(screen: pygame.Surface, selected: int, frame: int) -> Non
     item_spacing = 60
     for i, label in enumerate(PAUSE_ITEMS):
         is_sel = (i == selected)
-        color  = C_ACCENT if is_sel else C_DIM
+        color  = C_WHITE if is_sel else C_DIM
         iy     = item_y0 + i * item_spacing
 
         display_label = f"> {label} <" if is_sel else label
@@ -1230,7 +1230,7 @@ def draw_options_menu(
     for row in range(7):
         is_sel = (row == selected_row)
         ry = row_y0 + row * row_spacing
-        color = C_ACCENT if is_sel else C_DIM
+        color = C_WHITE if is_sel else C_DIM
 
         # Row 6 is the APPLY & BACK button
         if row == 6:
@@ -1408,7 +1408,7 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_n
     item_spacing = 80
     for i, label_str in enumerate(RESULT_ITEMS):
         is_sel = (i == selected)
-        color_item = C_ACCENT if is_sel else C_DIM
+        color_item = C_WHITE if is_sel else C_DIM
         iy = item_y0 + i * item_spacing
 
         display_label = f"> {label_str} <" if is_sel else label_str
@@ -1498,7 +1498,7 @@ def draw_difficulty_select(screen: pygame.Surface, selected: int, frame: int) ->
     item_spacing = 80
     for i, label_str in enumerate(DIFFICULTY_ITEMS):
         is_sel = (i == selected)
-        color_item = C_ACCENT if is_sel else C_DIM
+        color_item = C_WHITE if is_sel else C_DIM
         iy = item_y0 + i * item_spacing
 
         display_label = f"> {label_str} <" if is_sel else label_str
@@ -1620,7 +1620,7 @@ def draw_powerup_select(screen: pygame.Surface, selected: int, frame: int) -> No
             _powerup_rects.append(spr_rect.inflate(int(20 * sc), int(100 * sc))) # hit area
 
         # Text
-        name_s = name_font.render(name, False, C_ACCENT if is_sel else C_DIM)
+        name_s = name_font.render(name, False, C_WHITE if is_sel else C_DIM)
         screen.blit(name_s, name_s.get_rect(centerx=ix, centery=iy + int(80 * sc)))
         
         desc_s = desc_font.render(desc, False, C_WHITE if is_sel else C_DIM)
