@@ -16,6 +16,7 @@ Owner: Jim (visuals / UI)
 import os
 import math
 import pygame
+import lore
 
 # ---------------------------------------------------------------------------
 # Internal (low-res) canvas size and upscale factor
@@ -57,27 +58,33 @@ C_OVERHEAL  = ( 60, 140, 255)   # #3C8CFF overheal blue
 # ---------------------------------------------------------------------------
 
 _NORMAL_LABELS = {
-    "menu_items": ["PLAY", "OPTIONS", "QUIT"],
+    "menu_items": ["PLAY", "CODEX", "OPTIONS", "QUIT"],
     "pause_items": ["CONTINUE", "RESTART", "OPTIONS", "QUIT"],
     "pause_title": "PAUSED",
     "options_title": "SETTINGS",
+    "codex_title": "CODEX",
     "result_title": "GAME OVER",
     "result_items": ["PLAY AGAIN", "MAIN MENU"],
     "difficulty_items": ["Easy", "Medium", "Hard", "Back"],
     "perfection_title": "PERFECT",
     "overheal_label": "+50 HP OVERHEAL",
+    "pause_btn": "PAUSE",
+    "difficulty_title": "CHOOSE YOUR FATE",
 }
 
 _DARK_LABELS = {
-    "menu_items": ["BEGIN THE RECLAMATION", "ATTUNE SENSES", "EMBRACE OBLIVION"],
+    "menu_items": ["BEGIN THE RECLAMATION", "REGISTRY OF THE LOST", "ATTUNE SENSES", "EMBRACE OBLIVION"],
     "pause_items": ["PERSIST", "REKINDLE", "ATTUNE SENSES", "SURRENDER"],
     "pause_title": "STASIS",
     "options_title": "SENSES",
+    "codex_title": "REGISTRY",
     "result_title": "ALL IS FORGOTTEN",
     "result_items": ["SEEK REMEMBRANCE", "ABANDON THE LIGHT"],
     "difficulty_items": ["Mortal", "Scorched", "Hellish", "Back"],
     "perfection_title": "PERFECTION",
     "overheal_label": "+50 HP OVERHEAL",
+    "pause_btn": "STASIS",
+    "difficulty_title": "THE WILL TO PERSIST",
 }
 
 def get_ui_label(key: str, override_mode: int = None) -> any:
@@ -281,13 +288,13 @@ def _tick_grace() -> None:
 # Card size: 23x35 px, with 1px transparent gap (stride is 24x36).
 # 
 # Rows (based on visual icons):
-# 0: Spades (Red Sword)
-# 1: Clubs (White Skull)
-# 2: Diamonds (White Spark)
-# 3: Hearts (Red Shield)
+# 0: Sundered (Red Sword)
+# 1: Hollow (White Skull)
+# 2: Arcanum (White Spark)
+# 3: Grafted (Red Shield)
 # ---------------------------------------------------------------------------
 _RANKS      = ("A","2","3","4","5","6","7","8","9","10","J","Q","K")
-_SUIT_ROW   = {"Spades": 0, "Clubs": 1, "Diamonds": 2, "Hearts": 3}
+_SUIT_ROW   = {"Sundered": 0, "Hollow": 1, "Arcanum": 2, "Grafted": 3}
 
 _card_sprites: dict[str, pygame.Surface] = {}
 _joker_sprites: list[pygame.Surface] = []
@@ -777,6 +784,8 @@ def draw_perfection_popup(screen: pygame.Surface) -> None:
 # Main Menu
 # ---------------------------------------------------------------------------
 _menu_rects: list[pygame.Rect] = []
+_codex_rects: list[pygame.Rect] = []
+_suit_rects: list[pygame.Rect] = []
 
 def get_menu_items() -> list[str]:
     return get_ui_label("menu_items")
@@ -799,7 +808,7 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
 
     w  = screen.get_width()
     h  = screen.get_height()
-    cx = w // 2
+    left_x = 80         # Left-aligned anchor
     ty = h // 2 - 140   # Centered vertically (offset to account for menu items below)
 
     # ── OBLIVIO title — 3-layer extruded pixel-art style ──────────────────
@@ -808,14 +817,15 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     DEPTH     = 10                # px of 3D block shadow
     OUTLINE   = 3                 # outline thickness
 
-    depth_surf   = _font_title.render("OBLIVIO", False, C_DEPTH)
-    outline_surf = _font_title.render("OBLIVIO", False, C_OUTLINE)
-    title_surf   = _font_title.render("OBLIVIO", False, C_ACCENT)
-    title_rect   = title_surf.get_rect(centerx=cx, centery=ty)
+    title_text = "OBLIVIO"
+    depth_surf   = _font_title.render(title_text, False, C_DEPTH)
+    outline_surf = _font_title.render(title_text, False, C_OUTLINE)
+    title_surf   = _font_title.render(title_text, False, C_ACCENT)
+    title_rect   = title_surf.get_rect(left=left_x, centery=ty)
 
     # Step 1: stacked purple copies for the 3D block depth (down-right)
     for d in range(DEPTH, 0, -1):
-        dr = depth_surf.get_rect(centerx=cx + d, centery=ty + d)
+        dr = depth_surf.get_rect(left=left_x + d, centery=ty + d)
         screen.blit(depth_surf, dr)
 
     # Step 2: white outline — blit white text in every direction
@@ -823,16 +833,16 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
         for oy in range(-OUTLINE, OUTLINE + 1):
             if ox == 0 and oy == 0:
                 continue
-            or_ = outline_surf.get_rect(centerx=cx + ox, centery=ty + oy)
+            or_ = outline_surf.get_rect(left=left_x + ox, centery=ty + oy)
             screen.blit(outline_surf, or_)
 
     # Step 3: neon magenta fill on top — use GothicByte for eerie horror look
     screen.blit(title_surf, title_rect)
 
-    # ── Separator lines ────────────────────────────────────────────────────
+    # ── Separator line ─────────────────────────────────────────────────────
     sep_y = title_rect.bottom + 20
-    pygame.draw.line(screen, C_ACCENT, (cx - 280, sep_y), (cx - 50, sep_y), 2)
-    pygame.draw.line(screen, C_ACCENT, (cx + 50,  sep_y), (cx + 280, sep_y), 2)
+    # Single long line starting from left margin
+    pygame.draw.line(screen, C_ACCENT, (left_x, sep_y), (left_x + 500, sep_y), 2)
 
     # ── Menu items ─────────────────────────────────────────────────────────
     item_y0      = sep_y + 60
@@ -843,19 +853,21 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
         color  = C_WHITE if is_sel else C_DIM
         iy     = item_y0 + i * item_spacing
 
-        display_label = f"> {label} <" if is_sel else label
+        display_label = f"> {label}" if is_sel else label
         item_s = _font_lg.render(display_label, False, color)
         item_w = item_s.get_width()
         item_h = item_s.get_height()
 
         if is_sel:
-            box = pygame.Rect(cx - item_w // 2 - 32, iy - item_h // 2 - 8,
-                              item_w + 64, item_h + 16)
+            # Selection box anchored to the left
+            box = pygame.Rect(left_x - 16, iy - item_h // 2 - 8,
+                              item_w + 48, item_h + 16)
             pygame.draw.rect(screen, (25, 2, 14), box)
             pygame.draw.rect(screen, C_ACCENT, box, 2)
 
-        screen.blit(item_s, item_s.get_rect(centerx=cx, centery=iy))
-        _menu_rects.append(item_s.get_rect(centerx=cx, centery=iy).inflate(40, 20))
+        item_rect = item_s.get_rect(left=left_x, centery=iy)
+        screen.blit(item_s, item_rect)
+        _menu_rects.append(item_rect.inflate(40, 20))
 
 
 
@@ -1103,6 +1115,8 @@ def _draw_floating_texts(screen: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 # HUD strip  —  pixelated slanted health bar + score
 # ---------------------------------------------------------------------------
+_pause_btn_rect: pygame.Rect = pygame.Rect(0, 0, 0, 0)
+
 def draw_hud(
     screen: pygame.Surface,
     hp:     float,
@@ -1278,6 +1292,64 @@ def draw_powerups(
         px -= (icon_w + 12)
 
 
+def draw_pause_button(screen: pygame.Surface, frame: int) -> None:
+    """
+    Draw a gothic Pause button with a "||" icon in the bottom-left corner.
+    Brightens and pulses when hovered.
+    """
+    global _pause_btn_rect
+    w, h = screen.get_size()
+    
+    # Button dimensions (compact square for the icon)
+    bw, bh = 42, 42
+    
+    margin = 20
+    bx = margin
+    by = h - bh - margin
+    
+    _pause_btn_rect = pygame.Rect(bx, by, bw, bh)
+    
+    # Hover detection
+    mx, my = pygame.mouse.get_pos()
+    is_hovered = _pause_btn_rect.collidepoint(mx, my)
+    
+    # Pulse effect when hovered
+    alpha_mult = 1.0
+    if is_hovered:
+        t = (pygame.time.get_ticks() % 600) / 600.0
+        pulse = (math.sin(t * 2 * math.pi) + 1) / 2
+        alpha_mult = 0.8 + 0.2 * pulse
+    
+    # Draw background box
+    bg_color = (25, 2, 14) if is_hovered else (15, 5, 20)
+    pygame.draw.rect(screen, bg_color, _pause_btn_rect, border_radius=4)
+    
+    # Draw border
+    border_color = C_ACCENT if is_hovered else C_ACCENT_DK
+    pygame.draw.rect(screen, border_color, _pause_btn_rect, 2, border_radius=4)
+    
+    # Draw "||" icon
+    icon_color = C_WHITE if is_hovered else C_DIM
+    bar_w = 6
+    bar_h = 18
+    gap   = 6
+    
+    # Center the bars in the button
+    total_icon_w = bar_w * 2 + gap
+    ix = bx + (bw - total_icon_w) // 2
+    iy = by + (bh - bar_h) // 2
+    
+    if is_hovered:
+        # Create a small surface to apply alpha pulse to the icon
+        icon_surf = pygame.Surface((total_icon_w, bar_h), pygame.SRCALPHA)
+        pygame.draw.rect(icon_surf, (*icon_color, int(255 * alpha_mult)), (0, 0, bar_w, bar_h))
+        pygame.draw.rect(icon_surf, (*icon_color, int(255 * alpha_mult)), (bar_w + gap, 0, bar_w, bar_h))
+        screen.blit(icon_surf, (ix, iy))
+    else:
+        pygame.draw.rect(screen, icon_color, (ix, iy, bar_w, bar_h))
+        pygame.draw.rect(screen, icon_color, (ix + bar_w + gap, iy, bar_w, bar_h))
+
+
 # ---------------------------------------------------------------------------
 # ESC hint
 # ---------------------------------------------------------------------------
@@ -1378,6 +1450,7 @@ def _draw_volume_bar(
     width: int, height: int,
     value: float,
     is_selected: bool,
+    sc: float = 1.0,
 ) -> None:
     """Draw a pixel-art volume bar: filled portion in accent, empty in dark."""
     # Background
@@ -1392,13 +1465,15 @@ def _draw_volume_bar(
 
     # Border
     border_color = C_ACCENT if is_selected else C_ACCENT_DK
-    pygame.draw.rect(screen, border_color, (x, y, width, height), 2)
+    border_thickness = max(1, int(2 * sc))
+    pygame.draw.rect(screen, border_color, (x, y, width, height), border_thickness)
 
     # Percentage text
-    pct_font = get_gothic_font(18)
+    pct_font = get_gothic_font(int(18 * sc))
     pct_text = f"{int(value * 100)}%"
     pct_surf = pct_font.render(pct_text, False, C_WHITE if is_selected else C_DIM)
-    screen.blit(pct_surf, (x + width + 14, y + height // 2 - pct_surf.get_height() // 2))
+    # Use sc for horizontal offset, maybe min for vertical? Let's stay simple here as volume bar is small.
+    screen.blit(pct_surf, (x + width + int(14 * sc), y + height // 2 - pct_surf.get_height() // 2))
 
 
 def get_display_mode_label(idx: int) -> str:
@@ -1428,8 +1503,6 @@ def draw_options_menu(
     ``origin`` is 'menu' or 'pause' — changes the back-button label.
     """
     global _options_rects
-    if selected_row == 0:  # Only clear when starting to draw the first row, wait no, this runs per frame
-        pass # Actually we should clear before the loop.
     _options_rects.clear()
 
     c = get_canvas()
@@ -1439,31 +1512,37 @@ def draw_options_menu(
     w = screen.get_width()
     h = screen.get_height()
     cx = w // 2
+    
+    # Dual scale factors to handle aspect ratio changes
+    sc_w = w / 1024.0
+    sc_h = h / 768.0
+    # Use sc_w for font sizes and widths, sc_h for vertical positions
+    sc = sc_w 
 
     if _font_lg is None or _font_sm is None:
         return
 
     # ── Title ───────────────────────────────────────────────────────────
-    title_font = get_gothic_font(48)
+    title_font = get_gothic_font(int(48 * sc_w))
     title_text = get_ui_label("options_title", override_mode=opts.get("language_mode"))
     title_surf = title_font.render(title_text, False, C_WHITE)
     shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
-    title_rect = title_surf.get_rect(centerx=cx, centery=80)
-    screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
+    title_rect = title_surf.get_rect(centerx=cx, centery=int(80 * sc_h))
+    screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_w)))
     screen.blit(title_surf, title_rect)
 
     # Separator
-    sep_y = title_rect.bottom + 12
-    pygame.draw.line(screen, C_ACCENT, (cx - 240, sep_y), (cx + 240, sep_y), 2)
+    sep_y = title_rect.bottom + int(12 * sc_h)
+    pygame.draw.line(screen, C_ACCENT, (cx - int(240 * sc_w), sep_y), (cx + int(240 * sc_w), sep_y), max(1, int(2 * sc_w)))
 
     # ── Settings rows ──────────────────────────────────────────────────
-    row_y0 = sep_y + 40
-    row_spacing = 60
-    label_font = get_gothic_font(22)
-    value_font = get_gothic_font(22)
+    row_y0 = sep_y + int(40 * sc_h)
+    row_spacing = int(60 * sc_h)
+    label_font = get_gothic_font(int(22 * sc_w))
+    value_font = get_gothic_font(int(22 * sc_w))
 
-    label_x = cx - 280   # left-aligned labels
-    value_x = cx + 40    # right-aligned values area
+    label_x = cx - int(280 * sc_w)   # left-aligned labels
+    value_x = cx + int(40 * sc_w)    # right-aligned values area
 
     for row in range(8):
         is_sel = (row == selected_row)
@@ -1475,20 +1554,23 @@ def draw_options_menu(
             btn_label = "APPLY & BACK"
             if is_sel:
                 btn_label = f"> {btn_label} <"
-            btn_surf = _font_lg.render(btn_label, False, color)
+            
+            # Use font scaled by sc_w
+            btn_font = get_gothic_font(int(36 * sc_w))
+            btn_surf = btn_font.render(btn_label, False, color)
             btn_w = btn_surf.get_width()
             btn_h = btn_surf.get_height()
             btn_y = ry
 
             if is_sel:
-                box = pygame.Rect(cx - btn_w // 2 - 32, btn_y - btn_h // 2 - 8,
-                                  btn_w + 64, btn_h + 16)
+                box = pygame.Rect(cx - btn_w // 2 - int(32 * sc_w), btn_y - btn_h // 2 - int(8 * sc_h),
+                                  btn_w + int(64 * sc_w), btn_h + int(16 * sc_h))
                 pygame.draw.rect(screen, (25, 2, 14), box)
-                pygame.draw.rect(screen, C_ACCENT, box, 2)
+                pygame.draw.rect(screen, C_ACCENT, box, max(1, int(2 * sc_w)))
 
 
             screen.blit(btn_surf, btn_surf.get_rect(centerx=cx, centery=btn_y))
-            _options_rects.append(btn_surf.get_rect(centerx=cx, centery=btn_y).inflate(64, 16))
+            _options_rects.append(btn_surf.get_rect(centerx=cx, centery=btn_y).inflate(int(64 * sc_w), int(16 * sc_h)))
             continue
 
         # Label
@@ -1497,12 +1579,12 @@ def draw_options_menu(
 
         # Row highlight line
         if is_sel:
-            hl_y = ry + lbl_surf.get_height() // 2 + 4
+            hl_y = ry + lbl_surf.get_height() // 2 + int(4 * sc_h)
             pygame.draw.line(screen, C_ACCENT,
                              (label_x, hl_y),
                              (label_x + lbl_surf.get_width(), hl_y), 1)
                              
-        row_rect = pygame.Rect(cx - 300, ry - 15, 600, 30)
+        row_rect = pygame.Rect(cx - int(300 * sc_w), ry - int(15 * sc_h), int(600 * sc_w), int(30 * sc_h))
         _options_rects.append(row_rect)
 
         # Value display
@@ -1519,16 +1601,16 @@ def draw_options_menu(
             screen.blit(val_surf, (value_x, ry - val_surf.get_height() // 2))
 
         elif row == 2:  # Master Volume
-            _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
-                             opts["master_volume"], is_sel)
+            _draw_volume_bar(screen, value_x, ry - int(10 * sc_h), int(200 * sc_w), int(20 * sc_h),
+                             opts["master_volume"], is_sel, sc_w)
 
         elif row == 3:  # Music Volume
-            _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
-                             opts["music_volume"], is_sel)
+            _draw_volume_bar(screen, value_x, ry - int(10 * sc_h), int(200 * sc_w), int(20 * sc_h),
+                             opts["music_volume"], is_sel, sc_w)
 
         elif row == 4:  # SFX Volume
-            _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
-                             opts["sfx_volume"], is_sel)
+            _draw_volume_bar(screen, value_x, ry - int(10 * sc_h), int(200 * sc_w), int(20 * sc_h),
+                             opts["sfx_volume"], is_sel, sc_w)
 
         elif row == 5:  # Input Method
             import settings
@@ -1601,20 +1683,30 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_n
     ty = h // 2 - 180   # Centered vertically
 
     # ── Title ───────────────────────────────────────────────────────────
+    import settings
+    is_dark = settings.language_mode != 0
+    
     label = get_ui_label("result_title")
     color = C_ACCENT
 
+    # Dynamic scaling for long titles
+    base_size = 64 if is_dark else 80
+    scale_factor = w / 1024.0
+    
+    scaled_size = int(base_size * scale_factor)
+    title_f = get_gothic_font(scaled_size)
+
     C_DEPTH   = (45, 10, 90)
     C_OUTLINE = (255, 255, 255)
-    DEPTH     = 10
-    OUTLINE   = 3
+    DEPTH     = int(10 * scale_factor)
+    OUTLINE   = int(3 * scale_factor)
 
     if title_alpha > 0:
-        depth_surf   = _font_title.render(label, False, C_DEPTH)
+        depth_surf   = title_f.render(label, False, C_DEPTH)
         depth_surf.set_alpha(title_alpha)
-        outline_surf = _font_title.render(label, False, C_OUTLINE)
+        outline_surf = title_f.render(label, False, C_OUTLINE)
         outline_surf.set_alpha(title_alpha)
-        title_surf   = _font_title.render(label, False, color)
+        title_surf   = title_f.render(label, False, color)
         title_surf.set_alpha(title_alpha)
         title_rect   = title_surf.get_rect(centerx=cx, centery=ty)
 
@@ -1713,17 +1805,27 @@ def draw_difficulty_select(screen: pygame.Surface, selected: int, frame: int) ->
     ty = h // 2 - 140
 
     # ── Title ───────────────────────────────────────────────────────────
-    label = "DIFFICULTY"
+    import settings
+    is_dark = settings.language_mode != 0
+    
+    label = get_ui_label("difficulty_title")
     color = C_ACCENT
+
+    # Dynamic scaling for long titles
+    base_size = 64 if is_dark else 80
+    scale_factor = w / 1024.0
+    
+    scaled_size = int(base_size * scale_factor)
+    title_f = get_gothic_font(scaled_size)
 
     C_DEPTH   = (45, 10, 90)
     C_OUTLINE = (255, 255, 255)
-    DEPTH     = 10
-    OUTLINE   = 3
+    DEPTH     = int(10 * scale_factor)
+    OUTLINE   = int(3 * scale_factor)
 
-    depth_surf   = _font_title.render(label, False, C_DEPTH)
-    outline_surf = _font_title.render(label, False, C_OUTLINE)
-    title_surf   = _font_title.render(label, False, color)
+    depth_surf   = title_f.render(label, False, C_DEPTH)
+    outline_surf = title_f.render(label, False, C_OUTLINE)
+    title_surf   = title_f.render(label, False, color)
     title_rect   = title_surf.get_rect(centerx=cx, centery=ty)
 
     for d in range(DEPTH, 0, -1):
@@ -1798,6 +1900,9 @@ def get_hovered_difficulty_item(mx: int, my: int) -> int | None:
     for i, r in enumerate(_diff_rects):
         if r.collidepoint(mx, my): return i
     return None
+
+def get_hovered_pause_btn(mx: int, my: int) -> bool:
+    return _pause_btn_rect.collidepoint(mx, my)
 
 
 # ---------------------------------------------------------------------------
@@ -1887,6 +1992,353 @@ def get_hovered_powerup_item(mx: int, my: int) -> int | None:
 def get_options_rect(row: int) -> pygame.Rect | None:
     if 0 <= row < len(_options_rects):
         return _options_rects[row]
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Codex Screen
+# ---------------------------------------------------------------------------
+_codex_rects: list[pygame.Rect] = []
+
+_codex_anim_p: float = 0.0 # 0.0 = fan, 1.0 = center
+_codex_anim_card: tuple[str, str] | None = None
+_codex_anim_idx: int = -1
+_CODEX_ANIM_MS = 350.0 # speed of transition
+_codex_suit_hovers: list[float] = [0.0, 0.0, 0.0, 0.0]
+_codex_fan_hovers: list[float] = [0.0] * 13
+
+def update_codex_transitions(dt_ms: float, revealed_card: tuple[str, str] | None, selected_idx: int, view_mode: int = 0, suit_idx: int = 0) -> None:
+    """Drive the codex animation progress based on whether a card is revealed."""
+    global _codex_anim_p, _codex_anim_card, _codex_anim_idx, _codex_suit_hovers, _codex_fan_hovers
+    
+    if revealed_card:
+        if _codex_anim_card != revealed_card:
+            # New card revealed
+            _codex_anim_card = revealed_card
+            _codex_anim_idx = selected_idx
+            
+        _codex_anim_p = min(1.0, _codex_anim_p + dt_ms / _CODEX_ANIM_MS)
+    else:
+        _codex_anim_p = max(0.0, _codex_anim_p - dt_ms / _CODEX_ANIM_MS)
+        if _codex_anim_p <= 0:
+            _codex_anim_card = None
+            _codex_anim_idx = -1
+
+    # Update suit hovers
+    for i in range(4):
+        target = 1.0 if (view_mode == 0 and suit_idx == i) else 0.0
+        if _codex_suit_hovers[i] < target:
+            _codex_suit_hovers[i] = min(target, _codex_suit_hovers[i] + dt_ms / 120.0)
+        else:
+            _codex_suit_hovers[i] = max(target, _codex_suit_hovers[i] - dt_ms / 120.0)
+
+    # Update fan hovers
+    for i in range(13):
+        target = 1.0 if (view_mode == 1 and not revealed_card and selected_idx == i) else 0.0
+        if _codex_fan_hovers[i] < target:
+            _codex_fan_hovers[i] = min(target, _codex_fan_hovers[i] + dt_ms / 100.0)
+        else:
+            _codex_fan_hovers[i] = max(target, _codex_fan_hovers[i] - dt_ms / 100.0)
+
+def draw_codex(
+    screen: pygame.Surface,
+    view_mode: int, # 0=Decks, 1=Fan
+    suit_idx: int,
+    selected_idx: int,
+    revealed_card: tuple[str, str] | None,
+    frame: int
+) -> None:
+    """
+    Display 13 cards of a selected suit in a fan-shape at the bottom.
+    Includes a suit selector at the top.
+    """
+    global _codex_rects, _suit_rects
+    _codex_rects.clear()
+    _suit_rects.clear()
+    
+    c = get_canvas()
+    draw_creepy_void(c, frame)
+    blit_canvas_to_screen(screen)
+    
+    w, h = screen.get_size()
+    cx = w // 2
+    
+    if view_mode == 0:
+        _draw_codex_suit_select(screen, suit_idx, frame)
+        return
+    
+    # Dual scale factors
+    sc_w = w / 1024.0
+    sc_h = h / 768.0
+    
+    # Title
+    title_font = get_gothic_font(int(48 * sc_w))
+    title_text = get_ui_label("codex_title")
+    title_surf = title_font.render(title_text, False, C_WHITE)
+    shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
+    title_rect = title_surf.get_rect(centerx=cx, centery=int(50 * sc_h))
+    screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_w)))
+    screen.blit(title_surf, title_rect)
+    
+    # Suit Label (instead of selector)
+    suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
+    suit_name = suits[suit_idx]
+    suit_font = get_gothic_font(int(28 * sc_w))
+    s_surf = suit_font.render(suit_name.upper(), False, C_WHITE)
+    s_rect = s_surf.get_rect(centerx=cx, centery=title_rect.bottom + int(40 * sc_h))
+    screen.blit(s_surf, s_rect)
+    
+    # Static accent line below suit name
+    line_y = s_rect.bottom + int(5 * sc_h)
+    pygame.draw.line(screen, C_ACCENT, (s_rect.left - 20, line_y), (s_rect.right + 20, line_y), max(1, int(2 * sc_w)))
+
+    # Fan Layout Parameters
+    # We want the cards to fan out from the bottom center.
+    fan_cx = w // 2
+    fan_cy = h + int(150 * sc_h) # center below screen
+    radius = int(500 * sc_h)
+    arc_spread = math.radians(60) # total spread of the fan
+    
+    ranks = _RANKS
+    suit = suits[suit_idx]
+    
+    card_w = int(90 * sc_w)
+    card_h = int(140 * sc_w)
+    
+    for i, rank in enumerate(ranks):
+        is_sel = (i == selected_idx)
+        
+        # Don't draw the card in the fan if it's the one transitioning/focused
+        is_animating = (_codex_anim_idx == i and _codex_anim_p > 0)
+        if is_animating and not revealed_card and _codex_anim_p > 0.99:
+             # edge case: if we just closed but p is still 1.0, hide it
+             pass
+        elif is_animating:
+            continue
+
+        # Angle calculation
+        angle_offset = (i - 6) * (arc_spread / 12) # -30 to +30 degrees
+        angle = -math.pi/2 + angle_offset
+        
+        # Base position
+        px = fan_cx + radius * math.cos(angle)
+        py = fan_cy + radius * math.sin(angle)
+        
+        # Hover effect (Smooth)
+        fan_lift_p = _codex_fan_hovers[i]
+        ext_radius = radius + int(60 * sc_h * fan_lift_p)
+        px = fan_cx + ext_radius * math.cos(angle)
+        py = fan_cy + ext_radius * math.sin(angle)
+            
+        # Rotation
+        rot_deg = -math.degrees(angle_offset)
+        
+        src = get_card_surf(suit, rank)
+        if src:
+            scaled = pygame.transform.scale(src, (card_w, card_h))
+            rotated = pygame.transform.rotate(scaled, rot_deg)
+            
+            # Darken if any card is revealed/animating
+            # We use _codex_anim_p to dim the fan
+            if (revealed_card or _codex_anim_p > 0):
+                dark = pygame.Surface(rotated.get_size(), pygame.SRCALPHA)
+                dark.fill((0, 0, 0, int(150 * _codex_anim_p)))
+                rotated.blit(dark, (0, 0))
+                
+            r_rect = rotated.get_rect(center=(px, py))
+            _codex_rects.append(r_rect)
+            
+            screen.blit(rotated, r_rect)
+
+    # Transitioning / Focused Card
+    if _codex_anim_p > 0 and _codex_anim_card:
+        asuit, arank = _codex_anim_card
+        
+        # Start (Fan) position
+        angle_offset = (_codex_anim_idx - 6) * (arc_spread / 12)
+        angle = -math.pi/2 + angle_offset
+        start_x = fan_cx + radius * math.cos(angle)
+        start_y = fan_cy + radius * math.sin(angle)
+        start_rot = -math.degrees(angle_offset)
+        
+        # End (Center) position
+        end_x = cx
+        end_y = h // 2 - int(40 * sc_h)
+        end_rot = 0
+        
+        # Lerp
+        t = _codex_anim_p
+        # Smooth step for better feel
+        t_smooth = t * t * (3 - 2 * t)
+        
+        cur_x = start_x + (end_x - start_x) * t_smooth
+        cur_y = start_y + (end_y - start_y) * t_smooth
+        cur_rot = start_rot + (end_rot - start_rot) * t_smooth
+        
+        # Scale lerp
+        large_w = int(138 * sc_w)
+        large_h = int(210 * sc_w)
+        cur_w = int(card_w + (large_w - card_w) * t_smooth)
+        cur_h = int(card_h + (large_h - card_h) * t_smooth)
+        
+        src = get_card_surf(asuit, arank)
+        if src:
+            l_card = pygame.transform.scale(src, (cur_w, cur_h))
+            rotated = pygame.transform.rotate(l_card, cur_rot)
+            lc_rect = rotated.get_rect(center=(cur_x, cur_y))
+            
+            # Dim background further (only if p > 0)
+            if _codex_anim_p > 0:
+                dim = pygame.Surface((w, h), pygame.SRCALPHA)
+                dim.fill((0, 0, 0, int(180 * _codex_anim_p)))
+                screen.blit(dim, (0, 0))
+
+            # Shadow/Glow
+            glow_alpha = int(80 * _codex_anim_p)
+            glow_r = lc_rect.inflate(int(20 * sc_w), int(20 * sc_h))
+            glow_s = pygame.Surface(glow_r.size, pygame.SRCALPHA)
+            pygame.draw.rect(glow_s, (*C_ACCENT, glow_alpha), glow_s.get_rect(), border_radius=int(10 * sc_w))
+            screen.blit(glow_s, glow_r)
+            
+            screen.blit(rotated, lc_rect)
+            
+            # Lore Overlay (Fades in when p > 0.5)
+            if _codex_anim_p > 0.5:
+                lore_t = (_codex_anim_p - 0.5) / 0.5
+                lore_alpha = int(255 * lore_t)
+                
+                # Title
+                name_font = get_gothic_font(int(32 * sc_w))
+                name_text = lore.get_title(asuit, arank)
+                name_surf = name_font.render(name_text, False, C_WHITE)
+                name_surf.set_alpha(lore_alpha)
+                # Position relative to final center, but maybe offset slightly if animating?
+                # Let's keep it fixed at the end position for stability
+                screen.blit(name_surf, name_surf.get_rect(centerx=cx, top=end_y + large_h // 2 + int(20 * sc_h)))
+                
+                # Lore text
+                l_text = lore.get_lore(asuit, arank)
+                lore_font = get_gothic_font(int(20 * sc_w))
+                wrap_width = int(600 * sc_w)
+                words = l_text.split()
+                lines = []
+                cur_line = ""
+                for word in words:
+                    test_line = cur_line + " " + word if cur_line else word
+                    if lore_font.size(test_line)[0] < wrap_width:
+                        cur_line = test_line
+                    else:
+                        lines.append(cur_line)
+                        cur_line = word
+                lines.append(cur_line)
+                
+                ly = end_y + large_h // 2 + int(70 * sc_h)
+                for line in lines:
+                    ls = lore_font.render(line, False, C_DIM)
+                    ls.set_alpha(lore_alpha)
+                    screen.blit(ls, ls.get_rect(centerx=cx, top=ly))
+                    ly += int(25 * sc_h)
+
+                # Instruction to close
+                hint_font = get_gothic_font(int(18 * sc_w))
+                hint_text = "Press SPACE or ESC to close"
+                hint_surf = hint_font.render(hint_text, False, C_ACCENT)
+                hint_surf.set_alpha(lore_alpha)
+                screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
+
+    # Back Hint (only if not revealed)
+    if not revealed_card and _codex_anim_p == 0:
+        hint_font = get_gothic_font(int(16 * sc_w))
+        hint_text = "Press ESC to return to suits"
+        hint_surf = hint_font.render(hint_text, False, C_DIM)
+        screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(20 * sc_h)))
+
+
+def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: int) -> None:
+    """Draw 4 stacks of cards, one for each suit."""
+    global _codex_rects, _suit_rects
+    _codex_rects.clear()
+    _suit_rects.clear()
+
+    c = get_canvas()
+    draw_creepy_void(c, frame)
+    blit_canvas_to_screen(screen)
+
+    w, h = screen.get_size()
+    cx = w // 2
+    sc_w = w / 1024.0
+    sc_h = h / 768.0
+
+    # Title
+    title_font = get_gothic_font(int(48 * sc_w))
+    title_text = get_ui_label("codex_title")
+    title_surf = title_font.render(title_text, False, C_WHITE)
+    title_rect = title_surf.get_rect(centerx=cx, centery=int(100 * sc_h))
+    screen.blit(title_surf, title_rect)
+
+    # Decks
+    suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
+    deck_w = int(120 * sc_w)
+    deck_h = int(180 * sc_w)
+    spacing = int(220 * sc_w)
+    start_x = cx - (spacing * 1.5)
+
+    for i, suit in enumerate(suits):
+        is_sel = (i == selected_suit)
+        dx = start_x + i * spacing
+        dy = h // 2
+        
+        rect = pygame.Rect(0, 0, deck_w, deck_h)
+        rect.center = (dx, dy)
+        _suit_rects.append(rect) # for click detection
+        
+        # Hover lift (Smooth)
+        lift_p = _codex_suit_hovers[i]
+        dy -= int(20 * sc_h * lift_p)
+            
+        # Draw stack (3 cards)
+        for offset in range(3, 0, -1):
+            ox = dx + offset * int(3 * sc_w)
+            oy = dy + offset * int(3 * sc_w)
+            
+            back = get_back_surf()
+            if back:
+                b_scaled = pygame.transform.scale(back, (deck_w, deck_h))
+                screen.blit(b_scaled, b_scaled.get_rect(center=(ox, oy)))
+        
+        # Top card (Ace)
+        ace_surf = get_card_surf(suit, "A")
+        if ace_surf:
+            a_scaled = pygame.transform.scale(ace_surf, (deck_w, deck_h))
+            screen.blit(a_scaled, a_scaled.get_rect(center=(dx, dy)))
+            
+        # Highlight border removed as requested (redundant with hover lift)
+            
+        # Suit Label
+        label_font = get_gothic_font(int(24 * sc_w))
+        # Label color also transitions
+        t_c = (
+            int(C_DIM[0] + (C_WHITE[0] - C_DIM[0]) * lift_p),
+            int(C_DIM[1] + (C_WHITE[1] - C_DIM[1]) * lift_p),
+            int(C_DIM[2] + (C_WHITE[2] - C_DIM[2]) * lift_p)
+        )
+        l_surf = label_font.render(suit.upper(), False, t_c)
+        screen.blit(l_surf, l_surf.get_rect(centerx=dx, top=dy + deck_h // 2 + int(30 * sc_h)))
+
+    # Hint
+    hint_font = get_gothic_font(int(18 * sc_w))
+    hint_text = "Select a suit to view registry"
+    hint_surf = hint_font.render(hint_text, False, C_ACCENT)
+    screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
+
+def get_hovered_codex_item(mx: int, my: int) -> tuple[str, int] | None:
+    """Returns ('suit', idx) or ('card', idx) or None."""
+    for i, r in enumerate(_suit_rects):
+        if r.collidepoint(mx, my):
+            return ("suit", i)
+    for i, r in enumerate(_codex_rects):
+        if r.collidepoint(mx, my):
+            return ("card", i)
     return None
 
 

@@ -45,6 +45,7 @@ class GameState(Enum):
     POWERUP_SELECT = auto()   # Choosing a buff (Hard Mode only)
     GAME_OVER      = auto()   # HP reached 0  (only end state — no WIN)
     NEXT_ROUND     = auto()   # Brief interstitial before the next board loads
+    CODEX          = auto()   # Viewing the card library
 
 
 class Difficulty(Enum):
@@ -59,7 +60,7 @@ class Difficulty(Enum):
     """
     EASY   = ("Easy",   4, 4,  8, 15)
     MEDIUM = ("Medium", 6, 6, 18, 10)
-    HARD   = ("Hellish", 8, 8, 32, 10)
+    HARD   = ("Hard", 8, 8, 32, 10)
 
     def __init__(
         self,
@@ -224,6 +225,10 @@ class Game:
     def to_grid_select(self) -> None:
         """Transition to the GRID_SELECT screen."""
         self.state = GameState.GRID_SELECT
+
+    def to_codex(self) -> None:
+        """Transition to the CODEX screen."""
+        self.state = GameState.CODEX
 
     def to_menu(self) -> None:
         """Return to the main menu and clear board state."""
