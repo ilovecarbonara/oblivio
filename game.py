@@ -190,6 +190,10 @@ class Game:
         self._game_over_pending  = False
         self._game_over_delay    = 0.0
         self._turn_start_ticks   = 0
+
+        # Regeneration for clearing the previous round
+        self.hp.heal(25)
+        print(f"[REGEN] Round {self.round-1} cleared! +25 HP (Current: {self.hp.current_hp})")
         print(f"[ROUND {self.round}] New board generated — score carries over: {self.score.total}")
 
     def to_grid_select(self) -> None:
