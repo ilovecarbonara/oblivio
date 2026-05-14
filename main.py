@@ -144,6 +144,7 @@ def main() -> None:
     options_selected = 0       # 0-5 (rows in options menu)
     options_origin  = "menu"   # "menu" or "pause" — where we came from
     frame           = 0
+    _next_round_wait = 0.0     # used for perfection popup delay
 
     current_cw      = CARD_W
     current_ch      = CARD_H
@@ -609,18 +610,38 @@ def main() -> None:
                 ui.start_flip(c)
 
         # Detect state transitions
-        if game.state != _prev_state:
-            # NEXT_ROUND: immediately generate a fresh board and continue playing
+        if game.state != _prev_state or _next_round_wait > 0:
+            # NEXT_ROUND: generate a fresh board and continue playing
+            # (If perfect, we wait for the popup before advancing)
             if game.state == GameState.NEXT_ROUND:
-                _diff_nr = game.difficulty
-                _cw, _ch, _origin = get_grid_layout(_diff_nr, win_w, win_h)
-                current_cw, current_ch = _cw, _ch
-                _new_cards = grid.generate_grid(_diff_nr, _cw, _ch, PADDING, _origin)
-                game.advance_round(_new_cards)
-                cursor_pos = (0, 0)
-                ui.start_preview(_new_cards)
-                ui.reset_hp()
-                # Keep current BGM playing — no audio change needed
+                if not game.mistakes_made and _next_round_wait <= 0:
+                    _next_round_wait = 2200.0
+                    ui.trigger_perfection_popup()
+                
+                if _next_round_wait > 0:
+                    _next_round_wait -= dt_ms
+                    if _next_round_wait <= 0:
+                        _next_round_wait = 0.0
+                        # Wait finished, proceed!
+                        _diff_nr = game.difficulty
+                        _cw, _ch, _origin = get_grid_layout(_diff_nr, win_w, win_h)
+                        current_cw, current_ch = _cw, _ch
+                        _new_cards = grid.generate_grid(_diff_nr, _cw, _ch, PADDING, _origin)
+                        game.advance_round(_new_cards)
+                        cursor_pos = (0, 0)
+                        ui.start_preview(_new_cards)
+                        ui.reset_hp()
+                else:
+                    # Mismatch made, advance immediately
+                    _diff_nr = game.difficulty
+                    _cw, _ch, _origin = get_grid_layout(_diff_nr, win_w, win_h)
+                    current_cw, current_ch = _cw, _ch
+                    _new_cards = grid.generate_grid(_diff_nr, _cw, _ch, PADDING, _origin)
+                    game.advance_round(_new_cards)
+                    cursor_pos = (0, 0)
+                    ui.start_preview(_new_cards)
+                    ui.reset_hp()
+            
             elif game.state == GameState.GAME_OVER:
                 audio.bgm_play_menu()
                 audio.heartbeat_stop()
@@ -658,6 +679,7 @@ def main() -> None:
         ui.update_screen_shake()
         ui.update_transition()
         ui.update_result_anim(dt_ms)
+        ui.update_perfection_popup(dt_ms)
         if game.state == GameState.PLAYING and game.cards:
             ui.update_preview(game.cards, dt_ms)
             audio.update_heartbeat(game.hp.current_hp, cfg.music_volume, cfg.master_volume)
@@ -724,6 +746,7 @@ def main() -> None:
             ui.draw_result_screen(screen, False, game.score.total, game.round, result_selected, frame)
 
         # Transition overlay (drawn last, on top of everything)
+        ui.draw_perfection_popup(screen)
         ui.draw_transition(screen)
 
         # Screen shake post-process — shift entire frame then black-fill edges

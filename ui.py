@@ -600,6 +600,124 @@ def update_match_pulse(dt: float = 1.0) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Perfection Popup
+# ---------------------------------------------------------------------------
+_perf_timer:  float = 0.0
+_perf_active: bool  = False
+PERF_DURATION_MS = 2200.0
+
+
+def trigger_perfection_popup() -> None:
+    """Trigger the 'PERFECTION' popup for matching all cards perfectly."""
+    global _perf_timer, _perf_active
+    _perf_timer  = PERF_DURATION_MS
+    _perf_active = True
+
+
+def update_perfection_popup(dt_ms: float) -> None:
+    global _perf_timer, _perf_active
+    if not _perf_active:
+        return
+    _perf_timer -= dt_ms
+    if _perf_timer <= 0:
+        _perf_active = False
+
+
+def draw_perfection_popup(screen: pygame.Surface) -> None:
+    """Draw a flashy 'PERFECTION' message with glow and animation."""
+    if not _perf_active or _perf_timer <= 0:
+        return
+
+    if _font_title is None:
+        return
+
+    w, h = screen.get_size()
+    cx, cy = w // 2, h // 2
+    
+    # Progress: 0.0 (start) -> 1.0 (end)
+    t = 1.0 - (_perf_timer / PERF_DURATION_MS)
+    
+    # Animation: scale up and fade out
+    # Starts big and fades in, then stays, then fades out?
+    # Let's do:
+    # 0.0 - 0.2: Fade in & Scale up (overshoot)
+    # 0.2 - 0.8: Hold & pulse
+    # 0.8 - 1.0: Fade out & Scale up further
+    
+    alpha = 255
+    scale = 1.0
+    
+    if t < 0.2:
+        # Intro
+        sub_t = t / 0.2
+        alpha = int(255 * sub_t)
+        scale = 0.5 + 0.6 * sub_t   # starts small, grows to 1.1
+    elif t < 0.8:
+        # Hold
+        alpha = 255
+        scale = 1.1 + 0.05 * math.sin(t * 20)  # gentle pulse
+    else:
+        # Outro
+        sub_t = (t - 0.8) / 0.2
+        alpha = int(255 * (1.0 - sub_t))
+        scale = 1.1 + 0.3 * sub_t   # expands as it vanishes
+        
+    label = "PERFECTION"
+    
+    # Render with layers
+    C_DEPTH   = (45, 10, 90)
+    C_OUTLINE = (255, 255, 255)
+    DEPTH     = 8
+    OUTLINE   = 2
+    
+    # Base surface
+    base_surf = _font_title.render(label, False, C_ACCENT)
+    
+    # Scaling
+    sw = int(base_surf.get_width() * scale)
+    sh = int(base_surf.get_height() * scale)
+    if sw <= 0 or sh <= 0: return
+    
+    # Render layers
+    depth_surf   = _font_title.render(label, False, C_DEPTH)
+    outline_surf = _font_title.render(label, False, C_OUTLINE)
+    title_surf   = _font_title.render(label, False, C_ACCENT)
+    
+    # Scale layers
+    depth_surf   = pygame.transform.scale(depth_surf,   (sw, sh))
+    outline_surf = pygame.transform.scale(outline_surf, (sw, sh))
+    title_surf   = pygame.transform.scale(title_surf,   (sw, sh))
+    
+    # Apply alpha
+    depth_surf.set_alpha(alpha)
+    outline_surf.set_alpha(alpha)
+    title_surf.set_alpha(alpha)
+    
+    # Center rect
+    rect = title_surf.get_rect(center=(cx, cy))
+    
+    # Blit layers
+    for d in range(int(DEPTH * scale), 0, -1):
+        screen.blit(depth_surf, (rect.x + d, rect.y + d))
+        
+    for ox in range(-OUTLINE, OUTLINE + 1):
+        for oy in range(-OUTLINE, OUTLINE + 1):
+            if ox == 0 and oy == 0: continue
+            screen.blit(outline_surf, (rect.x + ox, rect.y + oy))
+            
+    screen.blit(title_surf, rect)
+    
+    # Extra glow: "OVERHEALED" text below if relevant? 
+    # Or just "ROUND CLEAR" 
+    sub_font = get_gothic_font(24)
+    sub_label = "+50 HP OVERHEAL"
+    sub_surf = sub_font.render(sub_label, False, C_OVERHEAL)
+    sub_surf.set_alpha(alpha)
+    sub_rect = sub_surf.get_rect(centerx=cx, centery=rect.bottom + 40)
+    screen.blit(sub_surf, sub_rect)
+
+
+# ---------------------------------------------------------------------------
 # Main Menu
 # ---------------------------------------------------------------------------
 MENU_ITEMS = ["PLAY", "OPTIONS", "QUIT"]

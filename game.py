@@ -129,6 +129,7 @@ class Game:
         # --- New Reward System ---
         self.successive_matches: int        = 0      # streak for regen rewards
         self.grace_mismatches  : int          = 0      # number of free mismatches remaining
+        self.last_round_was_perfect: bool     = False  # True if the previous round had no mistakes
 
     # ------------------------------------------------------------------
     # State transitions
@@ -165,6 +166,7 @@ class Game:
         # Reset reward tracking
         self.successive_matches = 0
         self.mistakes_made      = False
+        self.last_round_was_perfect = False
 
         # Reset power-ups
         self.shield_charges  = 0
@@ -209,7 +211,10 @@ class Game:
         # Perfect Round Reward
         if not self.mistakes_made:
             self.hp.add_overheal(50)
+            self.last_round_was_perfect = True
             print(f"[REGEN] Perfect Round! +50 HP overheal bonus. (Current: {self.hp.current_hp})")
+        else:
+            self.last_round_was_perfect = False
 
         self.mistakes_made = False
         self.grace_mismatches = GRACE_MISM_COUNT if self.difficulty == Difficulty.HARD else 0
