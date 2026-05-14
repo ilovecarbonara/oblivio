@@ -66,6 +66,7 @@ _NORMAL_LABELS = {
     "difficulty_items": ["Easy", "Medium", "Hard", "Back"],
     "perfection_title": "PERFECT",
     "overheal_label": "+50 HP OVERHEAL",
+    "pause_btn": "PAUSE",
 }
 
 _DARK_LABELS = {
@@ -78,6 +79,7 @@ _DARK_LABELS = {
     "difficulty_items": ["Mortal", "Scorched", "Hellish", "Back"],
     "perfection_title": "PERFECTION",
     "overheal_label": "+50 HP OVERHEAL",
+    "pause_btn": "STASIS",
 }
 
 def get_ui_label(key: str, override_mode: int = None) -> any:
@@ -1103,6 +1105,8 @@ def _draw_floating_texts(screen: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 # HUD strip  —  pixelated slanted health bar + score
 # ---------------------------------------------------------------------------
+_pause_btn_rect: pygame.Rect = pygame.Rect(0, 0, 0, 0)
+
 def draw_hud(
     screen: pygame.Surface,
     hp:     float,
@@ -1276,6 +1280,64 @@ def draw_powerups(
         screen.blit(s_icon, (px, py))
         # Step left for next icon
         px -= (icon_w + 12)
+
+
+def draw_pause_button(screen: pygame.Surface, frame: int) -> None:
+    """
+    Draw a gothic Pause button with a "||" icon in the bottom-left corner.
+    Brightens and pulses when hovered.
+    """
+    global _pause_btn_rect
+    w, h = screen.get_size()
+    
+    # Button dimensions (compact square for the icon)
+    bw, bh = 42, 42
+    
+    margin = 20
+    bx = margin
+    by = h - bh - margin
+    
+    _pause_btn_rect = pygame.Rect(bx, by, bw, bh)
+    
+    # Hover detection
+    mx, my = pygame.mouse.get_pos()
+    is_hovered = _pause_btn_rect.collidepoint(mx, my)
+    
+    # Pulse effect when hovered
+    alpha_mult = 1.0
+    if is_hovered:
+        t = (pygame.time.get_ticks() % 600) / 600.0
+        pulse = (math.sin(t * 2 * math.pi) + 1) / 2
+        alpha_mult = 0.8 + 0.2 * pulse
+    
+    # Draw background box
+    bg_color = (25, 2, 14) if is_hovered else (15, 5, 20)
+    pygame.draw.rect(screen, bg_color, _pause_btn_rect, border_radius=4)
+    
+    # Draw border
+    border_color = C_ACCENT if is_hovered else C_ACCENT_DK
+    pygame.draw.rect(screen, border_color, _pause_btn_rect, 2, border_radius=4)
+    
+    # Draw "||" icon
+    icon_color = C_WHITE if is_hovered else C_DIM
+    bar_w = 6
+    bar_h = 18
+    gap   = 6
+    
+    # Center the bars in the button
+    total_icon_w = bar_w * 2 + gap
+    ix = bx + (bw - total_icon_w) // 2
+    iy = by + (bh - bar_h) // 2
+    
+    if is_hovered:
+        # Create a small surface to apply alpha pulse to the icon
+        icon_surf = pygame.Surface((total_icon_w, bar_h), pygame.SRCALPHA)
+        pygame.draw.rect(icon_surf, (*icon_color, int(255 * alpha_mult)), (0, 0, bar_w, bar_h))
+        pygame.draw.rect(icon_surf, (*icon_color, int(255 * alpha_mult)), (bar_w + gap, 0, bar_w, bar_h))
+        screen.blit(icon_surf, (ix, iy))
+    else:
+        pygame.draw.rect(screen, icon_color, (ix, iy, bar_w, bar_h))
+        pygame.draw.rect(screen, icon_color, (ix + bar_w + gap, iy, bar_w, bar_h))
 
 
 # ---------------------------------------------------------------------------
@@ -1798,6 +1860,9 @@ def get_hovered_difficulty_item(mx: int, my: int) -> int | None:
     for i, r in enumerate(_diff_rects):
         if r.collidepoint(mx, my): return i
     return None
+
+def get_hovered_pause_btn(mx: int, my: int) -> bool:
+    return _pause_btn_rect.collidepoint(mx, my)
 
 
 # ---------------------------------------------------------------------------

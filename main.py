@@ -578,6 +578,14 @@ def main() -> None:
                             if result is not None:
                                 audio.sfx_flip()
                                 ui.start_flip(clicked)
+                    
+                    # Check Pause button
+                    if ui.get_hovered_pause_btn(mx, my):
+                        audio.bgm_pause()
+                        audio.heartbeat_stop()
+                        audio.sfx_popup()
+                        game.to_pause()
+                        pause_selected = 0
                 else:
                     valid_click = False
                     if game.state == GameState.MENU and ui.get_hovered_menu_item(mx, my) is not None:
@@ -725,6 +733,7 @@ def main() -> None:
             ui.draw_game_bg(screen, frame // 4)   # slow spin behind cards
             ui.draw_hud(screen, game.hp.current_hp, game.score.total, game.score.multiplier, game.grace_mismatches, GRACE_MISM_COUNT, HUD_H, frame)
             ui.draw_powerups(screen, game.shield_charges, game.lifesteal_active, game.has_extra_life)
+            ui.draw_pause_button(screen, frame)
             ui.draw_danger_vignette(screen, game.hp.current_hp, frame)
 
             # Hover detection — find which face-down card the mouse is over
