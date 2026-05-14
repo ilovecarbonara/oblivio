@@ -1448,6 +1448,7 @@ def _draw_volume_bar(
     width: int, height: int,
     value: float,
     is_selected: bool,
+    sc: float = 1.0,
 ) -> None:
     """Draw a pixel-art volume bar: filled portion in accent, empty in dark."""
     # Background
@@ -1462,13 +1463,15 @@ def _draw_volume_bar(
 
     # Border
     border_color = C_ACCENT if is_selected else C_ACCENT_DK
-    pygame.draw.rect(screen, border_color, (x, y, width, height), 2)
+    border_thickness = max(1, int(2 * sc))
+    pygame.draw.rect(screen, border_color, (x, y, width, height), border_thickness)
 
     # Percentage text
-    pct_font = get_gothic_font(18)
+    pct_font = get_gothic_font(int(18 * sc))
     pct_text = f"{int(value * 100)}%"
     pct_surf = pct_font.render(pct_text, False, C_WHITE if is_selected else C_DIM)
-    screen.blit(pct_surf, (x + width + 14, y + height // 2 - pct_surf.get_height() // 2))
+    # Use sc for horizontal offset, maybe min for vertical? Let's stay simple here as volume bar is small.
+    screen.blit(pct_surf, (x + width + int(14 * sc), y + height // 2 - pct_surf.get_height() // 2))
 
 
 def get_display_mode_label(idx: int) -> str:
@@ -1498,8 +1501,6 @@ def draw_options_menu(
     ``origin`` is 'menu' or 'pause' — changes the back-button label.
     """
     global _options_rects
-    if selected_row == 0:  # Only clear when starting to draw the first row, wait no, this runs per frame
-        pass # Actually we should clear before the loop.
     _options_rects.clear()
 
     c = get_canvas()
@@ -1509,31 +1510,37 @@ def draw_options_menu(
     w = screen.get_width()
     h = screen.get_height()
     cx = w // 2
+    
+    # Dual scale factors to handle aspect ratio changes
+    sc_w = w / 1024.0
+    sc_h = h / 768.0
+    # Use sc_w for font sizes and widths, sc_h for vertical positions
+    sc = sc_w 
 
     if _font_lg is None or _font_sm is None:
         return
 
     # ── Title ───────────────────────────────────────────────────────────
-    title_font = get_gothic_font(48)
+    title_font = get_gothic_font(int(48 * sc_w))
     title_text = get_ui_label("options_title", override_mode=opts.get("language_mode"))
     title_surf = title_font.render(title_text, False, C_WHITE)
     shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
-    title_rect = title_surf.get_rect(centerx=cx, centery=80)
-    screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
+    title_rect = title_surf.get_rect(centerx=cx, centery=int(80 * sc_h))
+    screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_w)))
     screen.blit(title_surf, title_rect)
 
     # Separator
-    sep_y = title_rect.bottom + 12
-    pygame.draw.line(screen, C_ACCENT, (cx - 240, sep_y), (cx + 240, sep_y), 2)
+    sep_y = title_rect.bottom + int(12 * sc_h)
+    pygame.draw.line(screen, C_ACCENT, (cx - int(240 * sc_w), sep_y), (cx + int(240 * sc_w), sep_y), max(1, int(2 * sc_w)))
 
     # ── Settings rows ──────────────────────────────────────────────────
-    row_y0 = sep_y + 40
-    row_spacing = 60
-    label_font = get_gothic_font(22)
-    value_font = get_gothic_font(22)
+    row_y0 = sep_y + int(40 * sc_h)
+    row_spacing = int(60 * sc_h)
+    label_font = get_gothic_font(int(22 * sc_w))
+    value_font = get_gothic_font(int(22 * sc_w))
 
-    label_x = cx - 280   # left-aligned labels
-    value_x = cx + 40    # right-aligned values area
+    label_x = cx - int(280 * sc_w)   # left-aligned labels
+    value_x = cx + int(40 * sc_w)    # right-aligned values area
 
     for row in range(8):
         is_sel = (row == selected_row)
@@ -1545,20 +1552,23 @@ def draw_options_menu(
             btn_label = "APPLY & BACK"
             if is_sel:
                 btn_label = f"> {btn_label} <"
-            btn_surf = _font_lg.render(btn_label, False, color)
+            
+            # Use font scaled by sc_w
+            btn_font = get_gothic_font(int(36 * sc_w))
+            btn_surf = btn_font.render(btn_label, False, color)
             btn_w = btn_surf.get_width()
             btn_h = btn_surf.get_height()
             btn_y = ry
 
             if is_sel:
-                box = pygame.Rect(cx - btn_w // 2 - 32, btn_y - btn_h // 2 - 8,
-                                  btn_w + 64, btn_h + 16)
+                box = pygame.Rect(cx - btn_w // 2 - int(32 * sc_w), btn_y - btn_h // 2 - int(8 * sc_h),
+                                  btn_w + int(64 * sc_w), btn_h + int(16 * sc_h))
                 pygame.draw.rect(screen, (25, 2, 14), box)
-                pygame.draw.rect(screen, C_ACCENT, box, 2)
+                pygame.draw.rect(screen, C_ACCENT, box, max(1, int(2 * sc_w)))
 
 
             screen.blit(btn_surf, btn_surf.get_rect(centerx=cx, centery=btn_y))
-            _options_rects.append(btn_surf.get_rect(centerx=cx, centery=btn_y).inflate(64, 16))
+            _options_rects.append(btn_surf.get_rect(centerx=cx, centery=btn_y).inflate(int(64 * sc_w), int(16 * sc_h)))
             continue
 
         # Label
@@ -1567,12 +1577,12 @@ def draw_options_menu(
 
         # Row highlight line
         if is_sel:
-            hl_y = ry + lbl_surf.get_height() // 2 + 4
+            hl_y = ry + lbl_surf.get_height() // 2 + int(4 * sc_h)
             pygame.draw.line(screen, C_ACCENT,
                              (label_x, hl_y),
                              (label_x + lbl_surf.get_width(), hl_y), 1)
                              
-        row_rect = pygame.Rect(cx - 300, ry - 15, 600, 30)
+        row_rect = pygame.Rect(cx - int(300 * sc_w), ry - int(15 * sc_h), int(600 * sc_w), int(30 * sc_h))
         _options_rects.append(row_rect)
 
         # Value display
@@ -1589,16 +1599,16 @@ def draw_options_menu(
             screen.blit(val_surf, (value_x, ry - val_surf.get_height() // 2))
 
         elif row == 2:  # Master Volume
-            _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
-                             opts["master_volume"], is_sel)
+            _draw_volume_bar(screen, value_x, ry - int(10 * sc_h), int(200 * sc_w), int(20 * sc_h),
+                             opts["master_volume"], is_sel, sc_w)
 
         elif row == 3:  # Music Volume
-            _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
-                             opts["music_volume"], is_sel)
+            _draw_volume_bar(screen, value_x, ry - int(10 * sc_h), int(200 * sc_w), int(20 * sc_h),
+                             opts["music_volume"], is_sel, sc_w)
 
         elif row == 4:  # SFX Volume
-            _draw_volume_bar(screen, value_x, ry - 10, 200, 20,
-                             opts["sfx_volume"], is_sel)
+            _draw_volume_bar(screen, value_x, ry - int(10 * sc_h), int(200 * sc_w), int(20 * sc_h),
+                             opts["sfx_volume"], is_sel, sc_w)
 
         elif row == 5:  # Input Method
             import settings
@@ -2008,32 +2018,39 @@ def draw_codex(
     w, h = screen.get_size()
     cx = w // 2
     
+    # Dual scale factors
+    sc_w = w / 1024.0
+    sc_h = h / 768.0
+    
     # Title
-    title_font = get_gothic_font(48)
+    title_font = get_gothic_font(int(48 * sc_w))
     title_text = get_ui_label("codex_title")
     title_surf = title_font.render(title_text, False, C_WHITE)
     shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
-    title_rect = title_surf.get_rect(centerx=cx, centery=50)
-    screen.blit(shadow_surf, (title_rect.x + 3, title_rect.y + 3))
+    title_rect = title_surf.get_rect(centerx=cx, centery=int(50 * sc_h))
+    screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_w)))
     screen.blit(title_surf, title_rect)
     
     # Separator
-    sep_y = title_rect.bottom + 10
-    pygame.draw.line(screen, C_ACCENT, (cx - 300, sep_y), (cx + 300, sep_y), 2)
+    sep_y = title_rect.bottom + int(10 * sc_h)
+    pygame.draw.line(screen, C_ACCENT, (cx - int(300 * sc_w), sep_y), (cx + int(300 * sc_w), sep_y), max(1, int(2 * sc_w)))
     
     # Card Grid
     # 13 ranks, 4 suits
     suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
     ranks = _RANKS
     
-    card_w, card_h = 46, 70  # Smaller for codex
-    padding = 8
+    # Cards should scale primarily by width to look big, but we check height too
+    card_sc = sc_w
+    card_w = int(46 * card_sc)
+    card_h = int(70 * card_sc)
+    padding = int(8 * card_sc)
     
     grid_w = 13 * card_w + 12 * padding
     grid_h = 4 * card_h + 3 * padding
     
     start_x = (w - grid_w) // 2
-    start_y = sep_y + 40
+    start_y = sep_y + int(40 * sc_h)
     
     for s_idx, suit in enumerate(suits):
         for r_idx, rank in enumerate(ranks):
@@ -2059,12 +2076,13 @@ def draw_codex(
                 screen.blit(scaled, (px, py))
             
             if is_sel:
-                pygame.draw.rect(screen, C_WHITE, rect.inflate(4, 4), 2, border_radius=3)
+                pygame.draw.rect(screen, C_WHITE, rect.inflate(int(4 * sc_w), int(4 * sc_h)), max(1, int(2 * sc_w)), border_radius=int(3 * sc_w))
                 t_pulse = (pygame.time.get_ticks() % 600) / 600.0
                 alpha = int(100 + 100 * math.sin(t_pulse * math.pi))
-                glow = pygame.Surface(rect.inflate(8, 8).size, pygame.SRCALPHA)
-                pygame.draw.rect(glow, (*C_ACCENT, alpha), glow.get_rect(), border_radius=4)
-                screen.blit(glow, (rect.x - 4, rect.y - 4))
+                glow_rect = rect.inflate(int(8 * sc_w), int(8 * sc_h))
+                glow = pygame.Surface(glow_rect.size, pygame.SRCALPHA)
+                pygame.draw.rect(glow, (*C_ACCENT, alpha), glow.get_rect(), border_radius=int(4 * sc_w))
+                screen.blit(glow, (rect.x - int(4 * sc_w), rect.y - int(4 * sc_h)))
 
     # Lore Overlay
     if revealed_card:
@@ -2077,52 +2095,54 @@ def draw_codex(
         screen.blit(dim, (0, 0))
         
         # Show large card
-        large_w, large_h = 138, 210
+        large_w = int(138 * sc_w)
+        large_h = int(210 * sc_w)
         src = get_card_surf(suit, rank)
         if src:
             l_card = pygame.transform.scale(src, (large_w, large_h))
-            lc_rect = l_card.get_rect(centerx=cx, centery=h // 2 - 40)
+            lc_rect = l_card.get_rect(centerx=cx, centery=h // 2 - int(40 * sc_h))
             
             # Shadow/Glow
-            glow_r = lc_rect.inflate(20, 20)
+            glow_r = lc_rect.inflate(int(20 * sc_w), int(20 * sc_h))
             glow_s = pygame.Surface(glow_r.size, pygame.SRCALPHA)
-            pygame.draw.rect(glow_s, (*C_ACCENT, 80), glow_s.get_rect(), border_radius=10)
+            pygame.draw.rect(glow_s, (*C_ACCENT, 80), glow_s.get_rect(), border_radius=int(10 * sc_w))
             screen.blit(glow_s, glow_r)
             
             screen.blit(l_card, lc_rect)
             
             # Title of card
-            name_font = get_gothic_font(32)
+            name_font = get_gothic_font(int(32 * sc_w))
             name_text = lore.get_title(suit, rank)
             name_surf = name_font.render(name_text, False, C_WHITE)
-            screen.blit(name_surf, name_surf.get_rect(centerx=cx, top=lc_rect.bottom + 20))
+            screen.blit(name_surf, name_surf.get_rect(centerx=cx, top=lc_rect.bottom + int(20 * sc_h)))
             
             # Lore text
-            lore_font = get_gothic_font(20)
+            lore_font = get_gothic_font(int(20 * sc_w))
             # Simple text wrapping
+            wrap_width = int(600 * sc_w)
             words = l_text.split()
             lines = []
             cur_line = ""
             for word in words:
                 test_line = cur_line + " " + word if cur_line else word
-                if lore_font.size(test_line)[0] < 600:
+                if lore_font.size(test_line)[0] < wrap_width:
                     cur_line = test_line
                 else:
                     lines.append(cur_line)
                     cur_line = word
             lines.append(cur_line)
             
-            ly = lc_rect.bottom + 70
+            ly = lc_rect.bottom + int(70 * sc_h)
             for line in lines:
                 ls = lore_font.render(line, False, C_DIM)
                 screen.blit(ls, ls.get_rect(centerx=cx, top=ly))
-                ly += 25
+                ly += int(25 * sc_h)
         
         # Instruction to close
-        hint_font = get_gothic_font(18)
+        hint_font = get_gothic_font(int(18 * sc_w))
         hint_text = "Press SPACE or ESC to close"
         hint_surf = hint_font.render(hint_text, False, C_ACCENT)
-        screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - 40))
+        screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
 
 def get_hovered_codex_item(mx: int, my: int) -> int | None:
     for i, r in enumerate(_codex_rects):
