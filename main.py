@@ -746,10 +746,14 @@ def main() -> None:
 
         # -------------------------------------------------- game logic tick
         mismatched = game.update(dt_ms)
-        if mismatched and len(mismatched) == 2:
-            audio.sfx_mismatch()
-            ui.trigger_mismatch_flash(mismatched[0], mismatched[1])
-            ui.trigger_screen_shake()
+        if mismatched:
+            if len(mismatched) == 2:
+                audio.sfx_mismatch()
+                ui.trigger_mismatch_flash(mismatched[0], mismatched[1])
+                ui.trigger_screen_shake()
+            elif len(mismatched) == 1:
+                audio.sfx_flip()
+                
             for c in mismatched:
                 ui.start_flip(c)
 

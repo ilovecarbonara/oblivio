@@ -447,6 +447,7 @@ class Game:
         if self._game_over_pending:
             self._game_over_delay -= dt_ms
             
+            revealed_card = None
             # Staggered card reveal effect for missed cards
             unflipped = [c for c in self.cards if c.state == CardState.FACE_DOWN]
             if unflipped:
@@ -458,6 +459,7 @@ class Game:
                     import random
                     c = random.choice(unflipped)
                     c.flip() # Reveal the missed card
+                    revealed_card = c
                     # Calculate how fast to flip based on remaining time and cards
                     reveal_interval = max(30.0, (self._game_over_delay - 800.0) / max(len(unflipped), 1))
                     self._reveal_trickle_timer = reveal_interval
@@ -466,7 +468,8 @@ class Game:
                 self._game_over_pending = False
                 print(f"[GAME OVER] HP depleted — final score: {self.score.total}")
                 self.game_over()
-            return None
+            
+            return [revealed_card] if revealed_card else None
 
         if not self.lock_input:
             return None
