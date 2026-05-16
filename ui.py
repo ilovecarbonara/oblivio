@@ -2046,6 +2046,7 @@ def _draw_codex_back_button(
     margin_y: int,
 ) -> pygame.Rect:
     """Gothic text back control for mouse users; returns clickable rect."""
+    import settings as cfg
     sc_w = screen.get_width() / 1024.0
     font = get_gothic_font(int(22 * sc_w))
     pad_x = int(16 * sc_w)
@@ -2056,7 +2057,10 @@ def _draw_codex_back_button(
     hit = plain.get_rect(topleft=(margin_x, margin_y)).inflate(pad_x, pad_y)
 
     mx, my = pygame.mouse.get_pos()
-    is_hov = hit.collidepoint(mx, my)
+    is_hov = False
+    if cfg.input_method != 1:  # Not pure keyboard
+        is_hov = hit.collidepoint(mx, my)
+
     surf = active if is_hov else plain
     at = surf.get_rect(topleft=(margin_x, margin_y))
 
@@ -2231,32 +2235,32 @@ def draw_codex(
         start_y = fan_cy + radius * math.sin(angle)
         start_rot = -math.degrees(angle_offset)
         
-        # End (Center) position
-        end_x = cx
-        end_y = h // 2 - int(40 * sc_h)
+        # End (Left side) position
+        end_x = cx - int(200 * sc_w)
+        end_y = h // 2
         end_rot = 0
-        
+
         # Lerp
         t = _codex_anim_p
         # Smooth step for better feel
         t_smooth = t * t * (3 - 2 * t)
-        
+
         cur_x = start_x + (end_x - start_x) * t_smooth
         cur_y = start_y + (end_y - start_y) * t_smooth
         cur_rot = start_rot + (end_rot - start_rot) * t_smooth
-        
+
         # Scale lerp
-        large_w = int(138 * sc_w)
-        large_h = int(210 * sc_w)
+        large_w = int(200 * sc_w)
+        large_h = int(300 * sc_w)
         cur_w = int(card_w + (large_w - card_w) * t_smooth)
         cur_h = int(card_h + (large_h - card_h) * t_smooth)
-        
+
         src = get_card_surf(asuit, arank)
         if src:
             l_card = pygame.transform.scale(src, (cur_w, cur_h))
             rotated = pygame.transform.rotate(l_card, cur_rot)
             lc_rect = rotated.get_rect(center=(cur_x, cur_y))
-            
+
             # Dim background further (only if p > 0)
             if _codex_anim_p > 0:
                 dim = pygame.Surface((w, h), pygame.SRCALPHA)
@@ -2269,27 +2273,26 @@ def draw_codex(
             glow_s = pygame.Surface(glow_r.size, pygame.SRCALPHA)
             pygame.draw.rect(glow_s, (*C_ACCENT, glow_alpha), glow_s.get_rect(), border_radius=int(10 * sc_w))
             screen.blit(glow_s, glow_r)
-            
+
             screen.blit(rotated, lc_rect)
-            
+
             # Lore Overlay (Fades in when p > 0.5)
             if _codex_anim_p > 0.5:
                 lore_t = (_codex_anim_p - 0.5) / 0.5
                 lore_alpha = int(255 * lore_t)
-                
+
                 # Title
-                name_font = get_gothic_font(int(32 * sc_w))
+                name_font = get_gothic_font(int(36 * sc_w))
                 name_text = lore.get_title(asuit, arank)
                 name_surf = name_font.render(name_text, False, C_WHITE)
                 name_surf.set_alpha(lore_alpha)
-                # Position relative to final center, but maybe offset slightly if animating?
-                # Let's keep it fixed at the end position for stability
-                screen.blit(name_surf, name_surf.get_rect(centerx=cx, top=end_y + large_h // 2 + int(20 * sc_h)))
-                
+                # Position on the right side
+                screen.blit(name_surf, name_surf.get_rect(left=cx - int(20 * sc_w), top=end_y - large_h // 2))
+
                 # Lore text
                 l_text = lore.get_lore(asuit, arank)
-                lore_font = get_gothic_font(int(20 * sc_w))
-                wrap_width = int(600 * sc_w)
+                lore_font = get_gothic_font(int(22 * sc_w))
+                wrap_width = int(450 * sc_w)
                 words = l_text.split()
                 lines = []
                 cur_line = ""
@@ -2301,20 +2304,20 @@ def draw_codex(
                         lines.append(cur_line)
                         cur_line = word
                 lines.append(cur_line)
-                
-                ly = end_y + large_h // 2 + int(70 * sc_h)
+
+                ly = end_y - large_h // 2 + int(60 * sc_h)
                 for line in lines:
                     ls = lore_font.render(line, False, C_DIM)
                     ls.set_alpha(lore_alpha)
-                    screen.blit(ls, ls.get_rect(centerx=cx, top=ly))
-                    ly += int(25 * sc_h)
+                    screen.blit(ls, ls.get_rect(left=cx - int(20 * sc_w), top=ly))
+                    ly += int(28 * sc_h)
 
                 # Instruction to close
                 hint_font = get_gothic_font(int(18 * sc_w))
                 hint_text = "Press SPACE or ESC to close"
                 hint_surf = hint_font.render(hint_text, False, C_ACCENT)
                 hint_surf.set_alpha(lore_alpha)
-                screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
+                screen.blit(hint_surf, hint_surf.get_rect(left=cx - int(20 * sc_w), top=ly + int(30 * sc_h)))
 
     # Back to lineages (mouse + keyboard hint)
     if not revealed_card and _codex_anim_p == 0:
@@ -2395,6 +2398,19 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
         )
         l_surf = label_font.render(suit.upper(), False, t_c)
         screen.blit(l_surf, l_surf.get_rect(centerx=dx, top=dy + deck_h // 2 + int(30 * sc_h)))
+
+        # Lineage Subtitle (Lore hint)
+        descs = {
+            "Sundered": "Shattered remnants of power",
+            "Hollow": "Empty vessels waiting to be filled",
+            "Arcanum": "Keepers of forbidden knowledge",
+            "Grafted": "Flesh shaped by unnatural forces"
+        }
+        sub_font = get_gothic_font(int(14 * sc_w))
+        sub_surf = sub_font.render(descs.get(suit, ""), False, C_DIM)
+        # Fade the subtitle in as it is hovered
+        sub_surf.set_alpha(int(100 + 155 * lift_p))
+        screen.blit(sub_surf, sub_surf.get_rect(centerx=dx, top=dy + deck_h // 2 + int(65 * sc_h)))
 
     # Hint
     hint_font = get_gothic_font(int(18 * sc_w))
