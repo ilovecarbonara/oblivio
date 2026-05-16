@@ -25,3 +25,4 @@ build/
 
 # Local configuration
 settings.json
+SESSION_CONTEXT.md
