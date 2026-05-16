@@ -2169,8 +2169,8 @@ def draw_codex(
     # Fan Layout Parameters
     # We want the cards to fan out from the bottom center.
     fan_cx = w // 2
-    fan_cy = h + int(150 * sc_h) # center below screen
-    radius = int(500 * sc_h)
+    fan_cy = h + int(320 * sc_h) # pushed further down to edge
+    radius = int(520 * sc_h)
     arc_spread = math.radians(60) # total spread of the fan
     
     ranks = _RANKS
@@ -2398,19 +2398,6 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
         )
         l_surf = label_font.render(suit.upper(), False, t_c)
         screen.blit(l_surf, l_surf.get_rect(centerx=dx, top=dy + deck_h // 2 + int(30 * sc_h)))
-
-        # Lineage Subtitle (Lore hint)
-        descs = {
-            "Sundered": "Shattered remnants of power",
-            "Hollow": "Empty vessels waiting to be filled",
-            "Arcanum": "Keepers of forbidden knowledge",
-            "Grafted": "Flesh shaped by unnatural forces"
-        }
-        sub_font = get_gothic_font(int(14 * sc_w))
-        sub_surf = sub_font.render(descs.get(suit, ""), False, C_DIM)
-        # Fade the subtitle in as it is hovered
-        sub_surf.set_alpha(int(100 + 155 * lift_p))
-        screen.blit(sub_surf, sub_surf.get_rect(centerx=dx, top=dy + deck_h // 2 + int(65 * sc_h)))
 
     # Hint
     hint_font = get_gothic_font(int(18 * sc_w))
