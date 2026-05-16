@@ -47,6 +47,11 @@ _scaled_cache: tuple[BackgroundId, int, int] | None = None
 _scaled_surf: pygame.Surface | None = None
 _blit_pos: tuple[int, int] = (0, 0)
 
+_fade_prev_surf: pygame.Surface | None = None
+_fade_prev_pos: tuple[int, int] = (0, 0)
+_fade_p: float = 1.0
+_fade_last_ticks: int = 0
+
 
 def init() -> None:
     """Load all background PNGs. Call once after pygame.display is available."""
@@ -78,11 +83,18 @@ def set_default() -> None:
 
 def set_active(bg: BackgroundId) -> None:
     """Switch the active background (invalidates the scale cache)."""
-    global _active
+    global _active, _fade_prev_surf, _fade_prev_pos, _fade_p, _fade_last_ticks
     if bg not in _sources and _sources:
         raise ValueError(f"Unknown background: {bg}")
     if bg == _active and _scaled_cache is not None:
         return
+    
+    if _scaled_surf is not None:
+        _fade_prev_surf = _scaled_surf
+        _fade_prev_pos = _blit_pos
+    _fade_p = 0.0
+    _fade_last_ticks = pygame.time.get_ticks()
+    
     _active = bg
     invalidate_cache()
 
@@ -348,18 +360,42 @@ def _draw_effects(screen: pygame.Surface, t: float) -> None:
 
 def draw(screen: pygame.Surface, t: float = 0) -> None:
     """Blit the active background and subtle atmospheric overlay to *screen*."""
+    global _fade_p, _fade_last_ticks, _fade_prev_surf
     if not _sources:
         return
+
+    now = pygame.time.get_ticks()
+    if _fade_p < 1.0 and _fade_last_ticks > 0:
+        dt_ms = now - _fade_last_ticks
+        _fade_p = min(1.0, _fade_p + dt_ms / 600.0)
+        if _fade_p == 1.0:
+            _fade_prev_surf = None
+    _fade_last_ticks = now
 
     vw, vh = screen.get_size()
     key = (_active, vw, vh)
     if _scaled_cache != key or _scaled_surf is None:
         _rebuild_scaled(vw, vh)
 
-    if _scaled_surf is not None:
-        screen.blit(_scaled_surf, _blit_pos)
-
-    _draw_effects(screen, t)
+    # Crossfade
+    if _fade_prev_surf is not None and _fade_p < 1.0:
+        screen.blit(_fade_prev_surf, _fade_prev_pos)
+        if _scaled_surf is not None:
+            _scaled_surf.set_alpha(int(255 * _fade_p))
+            screen.blit(_scaled_surf, _blit_pos)
+            _scaled_surf.set_alpha(255)
+            
+            # Effects fade
+            layer = _ensure_effect_layer(vw, vh)
+            drawer = _FX_DRAWERS.get(_active, _draw_fx_default)
+            drawer(layer, vw, vh, t)
+            layer.set_alpha(int(255 * _fade_p))
+            screen.blit(layer, (0, 0))
+            layer.set_alpha(255)
+    else:
+        if _scaled_surf is not None:
+            screen.blit(_scaled_surf, _blit_pos)
+        _draw_effects(screen, t)
 
 
 def active() -> BackgroundId:
