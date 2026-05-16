@@ -173,6 +173,11 @@ def apply_display(screen: pygame.Surface) -> pygame.Surface:
         flags = 0
 
     new_screen = pygame.display.set_mode((w, h), flags)
+    try:
+        import backgrounds
+        backgrounds.invalidate_cache()
+    except ImportError:
+        pass
     print(f"[SETTINGS] Display applied: {mode_label} {w}×{h}")
     return new_screen
 

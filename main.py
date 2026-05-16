@@ -9,6 +9,10 @@ Owner: Jay (game logic) / Jim (ui.py wiring)
 
 import os
 import sys
+
+# Nearest-neighbour / point filtering for all SDL scaled output (must be before pygame.init)
+os.environ.setdefault("SDL_RENDER_SCALE_QUALITY", "0")
+
 import pygame
 
 from card import Card, CardState
@@ -16,6 +20,7 @@ from game import Game, GameState, Difficulty, GRACE_MISM_COUNT
 import grid
 import ui
 import audio
+import backgrounds
 import settings as cfg
 
 
@@ -143,6 +148,8 @@ def main() -> None:
     ui.load_fonts()
     ui.load_card_sprites()
     ui.load_health_sprites()
+    backgrounds.init()
+    backgrounds.set_default()
 
     game            = Game()   # starts in MENU state
     menu_selected   = 0        # 0=PLAY  1=OPTIONS  2=QUIT
@@ -280,6 +287,7 @@ def main() -> None:
                             audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
                             screen = cfg.apply_display(screen)
                             win_w, win_h = screen.get_size()
+                            backgrounds.invalidate_cache()
                             if game.cards:
                                 current_cw, current_ch = _reposition_grid(game, current_cw, current_ch, win_w, win_h)
                             game.from_options()
@@ -508,6 +516,7 @@ def main() -> None:
                             current_cw, current_ch = _cw, _ch
                             _cards = grid.generate_grid(_diff, _cw, _ch, PADDING, _origin)
                             game.start_game(_diff, _cards)
+                            backgrounds.set_for_difficulty(_diff)
                             cursor_pos = (0, 0)
                             ui.start_preview(_cards)
                             if game.state == GameState.POWERUP_SELECT:
@@ -560,6 +569,7 @@ def main() -> None:
                             current_cw, current_ch = _cw, _ch
                             _cards = grid.generate_grid(_diff_r, _cw, _ch, PADDING, _origin)
                             game.start_game(_diff_r, _cards)
+                            backgrounds.set_for_difficulty(_diff_r)
                             ui.reset_hp()
                             cursor_pos = (0, 0)
                             ui.start_preview(_cards)
@@ -614,6 +624,7 @@ def main() -> None:
                             cfg.save()
                             screen = cfg.apply_display(screen)
                             win_w, win_h = screen.get_size()
+                            backgrounds.invalidate_cache()
                             cfg.apply_audio()
                             audio.apply_volumes(cfg.master_volume, cfg.music_volume, cfg.sfx_volume)
 
@@ -633,6 +644,7 @@ def main() -> None:
                             current_cw, current_ch = _cw, _ch
                             _cards = grid.generate_grid(_diff_ga, _cw, _ch, PADDING, _origin)
                             game.start_game(_diff_ga, _cards)
+                            backgrounds.set_for_difficulty(_diff_ga)
                             cursor_pos = (0, 0)
                             ui.start_preview(_cards)
                             if game.state == GameState.POWERUP_SELECT:
@@ -683,7 +695,18 @@ def main() -> None:
                     elif game.state == GameState.POWERUP_SELECT and ui.get_hovered_powerup_item(mx, my) is not None:
                         valid_click = True
                     elif game.state == GameState.CODEX:
-                        valid_click = True
+                        back = ui.get_hovered_codex_back(mx, my)
+                        if back == "menu":
+                            audio.sfx_cancel()
+                            def _to_menu_cb():
+                                game.to_menu()
+                            ui.start_transition(_to_menu_cb)
+                        elif back == "lineage":
+                            audio.sfx_flip()
+                            codex_view_mode = 0
+                            codex_revealed_card = None
+                        elif ui.get_hovered_codex_item(mx, my) is not None:
+                            valid_click = True
                         
                     if valid_click:
                         pygame.event.post(pygame.event.Event(EVENT_SELECT))

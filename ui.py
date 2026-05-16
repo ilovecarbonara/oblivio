@@ -70,6 +70,8 @@ _NORMAL_LABELS = {
     "overheal_label": "+50 HP OVERHEAL",
     "pause_btn": "PAUSE",
     "difficulty_title": "CHOOSE YOUR FATE",
+    "codex_back_menu": "MAIN MENU",
+    "codex_back_lineage": "LINEAGES",
 }
 
 _DARK_LABELS = {
@@ -85,6 +87,8 @@ _DARK_LABELS = {
     "overheal_label": "+50 HP OVERHEAL",
     "pause_btn": "STASIS",
     "difficulty_title": "THE WILL TO PERSIST",
+    "codex_back_menu": "RETURN",
+    "codex_back_lineage": "LINEAGES",
 }
 
 def get_ui_label(key: str, override_mode: int = None) -> any:
@@ -799,9 +803,7 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
     """
     global _menu_rects
     _menu_rects.clear()
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)  # chunky void background first
+    _draw_ui_background(screen, frame=frame // 4)
 
     if _font_title is None or _font_lg is None or _font_sm is None:
         return
@@ -875,17 +877,36 @@ def draw_menu(screen: pygame.Surface, selected: int, frame: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Game-screen background
+# Themed playfield backgrounds (pixel-perfect cover + veil)
 # ---------------------------------------------------------------------------
 
-def draw_game_bg(screen: pygame.Surface, frame: int) -> None:
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)
-    # Dark veil so cards remain readable over the void
+def _draw_themed_background(
+    screen: pygame.Surface,
+    veil_alpha: int = 155,
+    frame: int = 0,
+) -> None:
+    import backgrounds
+
+    backgrounds.draw(screen, float(frame))
     veil = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    veil.fill((0, 0, 0, 155))
+    veil.fill((0, 0, 0, veil_alpha))
     screen.blit(veil, (0, 0))
+
+
+def _draw_ui_background(
+    screen: pygame.Surface,
+    veil_alpha: int = 100,
+    frame: int = 0,
+) -> None:
+    """Default castle backdrop for menu, codex, and settings."""
+    import backgrounds
+
+    backgrounds.set_default()
+    _draw_themed_background(screen, veil_alpha=veil_alpha, frame=frame)
+
+
+def draw_game_bg(screen: pygame.Surface, frame: int) -> None:
+    _draw_themed_background(screen, veil_alpha=155, frame=frame)
 
 
 # ---------------------------------------------------------------------------
@@ -1505,9 +1526,7 @@ def draw_options_menu(
     global _options_rects
     _options_rects.clear()
 
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)
+    _draw_ui_background(screen, frame=frame // 4)
 
     w = screen.get_width()
     h = screen.get_height()
@@ -1787,14 +1806,19 @@ def get_difficulty_items() -> list[str]:
 
 def draw_difficulty_select(screen: pygame.Surface, selected: int, frame: int) -> None:
     """
-    Difficulty selection screen matching the Main Menu aesthetic.
+    Difficulty selection screen — previews Mortal / Scorched / Hellish backdrops
+    for rows 0–2; procedural void when Back is highlighted.
     """
     global _diff_rects
     _diff_rects.clear()
 
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)
+    t = frame // 4
+    if selected in (0, 1, 2):
+        import backgrounds
+        backgrounds.set_for_grid_index(selected)
+        _draw_themed_background(screen, veil_alpha=120, frame=t)
+    else:
+        _draw_ui_background(screen, veil_alpha=120, frame=t)
 
     if _font_title is None or _font_lg is None or _font_sm is None:
         return
@@ -1999,6 +2023,8 @@ def get_options_rect(row: int) -> pygame.Rect | None:
 # Codex Screen
 # ---------------------------------------------------------------------------
 _codex_rects: list[pygame.Rect] = []
+_codex_back_menu_rect: pygame.Rect | None = None
+_codex_back_lineage_rect: pygame.Rect | None = None
 
 _codex_anim_p: float = 0.0 # 0.0 = fan, 1.0 = center
 _codex_anim_card: tuple[str, str] | None = None
@@ -2006,6 +2032,51 @@ _codex_anim_idx: int = -1
 _CODEX_ANIM_MS = 350.0 # speed of transition
 _codex_suit_hovers: list[float] = [0.0, 0.0, 0.0, 0.0]
 _codex_fan_hovers: list[float] = [0.0] * 13
+
+def _clear_codex_back_rects() -> None:
+    global _codex_back_menu_rect, _codex_back_lineage_rect
+    _codex_back_menu_rect = None
+    _codex_back_lineage_rect = None
+
+
+def _draw_codex_back_button(
+    screen: pygame.Surface,
+    label: str,
+    margin_x: int,
+    margin_y: int,
+) -> pygame.Rect:
+    """Gothic text back control for mouse users; returns clickable rect."""
+    sc_w = screen.get_width() / 1024.0
+    font = get_gothic_font(int(22 * sc_w))
+    pad_x = int(16 * sc_w)
+    pad_y = int(10 * sc_w)
+
+    plain = font.render(label, False, C_DIM)
+    active = font.render(f"> {label}", False, C_WHITE)
+    hit = plain.get_rect(topleft=(margin_x, margin_y)).inflate(pad_x, pad_y)
+
+    mx, my = pygame.mouse.get_pos()
+    is_hov = hit.collidepoint(mx, my)
+    surf = active if is_hov else plain
+    at = surf.get_rect(topleft=(margin_x, margin_y))
+
+    if is_hov:
+        box = at.inflate(pad_x, pad_y)
+        pygame.draw.rect(screen, (25, 2, 14), box)
+        pygame.draw.rect(screen, C_ACCENT, box, max(1, int(2 * sc_w)))
+
+    screen.blit(surf, at)
+    return hit
+
+
+def get_hovered_codex_back(mx: int, my: int) -> str | None:
+    """'menu' = return to main menu, 'lineage' = return to suit select."""
+    if _codex_back_menu_rect and _codex_back_menu_rect.collidepoint(mx, my):
+        return "menu"
+    if _codex_back_lineage_rect and _codex_back_lineage_rect.collidepoint(mx, my):
+        return "lineage"
+    return None
+
 
 def update_codex_transitions(dt_ms: float, revealed_card: tuple[str, str] | None, selected_idx: int, view_mode: int = 0, suit_idx: int = 0) -> None:
     """Drive the codex animation progress based on whether a card is revealed."""
@@ -2055,10 +2126,9 @@ def draw_codex(
     global _codex_rects, _suit_rects
     _codex_rects.clear()
     _suit_rects.clear()
+    _clear_codex_back_rects()
     
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)
+    _draw_ui_background(screen, frame=frame // 4)
     
     w, h = screen.get_size()
     cx = w // 2
@@ -2246,10 +2316,15 @@ def draw_codex(
                 hint_surf.set_alpha(lore_alpha)
                 screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
 
-    # Back Hint (only if not revealed)
+    # Back to lineages (mouse + keyboard hint)
     if not revealed_card and _codex_anim_p == 0:
+        global _codex_back_lineage_rect
+        margin = int(24 * sc_w)
+        _codex_back_lineage_rect = _draw_codex_back_button(
+            screen, get_ui_label("codex_back_lineage"), margin, margin,
+        )
         hint_font = get_gothic_font(int(16 * sc_w))
-        hint_text = "Press ESC to return to suits"
+        hint_text = "Press ESC to return to lineages"
         hint_surf = hint_font.render(hint_text, False, C_DIM)
         screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(20 * sc_h)))
 
@@ -2259,10 +2334,6 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
     global _codex_rects, _suit_rects
     _codex_rects.clear()
     _suit_rects.clear()
-
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)
 
     w, h = screen.get_size()
     cx = w // 2
@@ -2330,6 +2401,13 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
     hint_text = "Select a suit to view registry"
     hint_surf = hint_font.render(hint_text, False, C_ACCENT)
     screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
+
+    global _codex_back_menu_rect
+    margin = int(24 * sc_w)
+    _codex_back_menu_rect = _draw_codex_back_button(
+        screen, get_ui_label("codex_back_menu"), margin, int(24 * sc_h),
+    )
+
 
 def get_hovered_codex_item(mx: int, my: int) -> tuple[str, int] | None:
     """Returns ('suit', idx) or ('card', idx) or None."""
