@@ -2086,7 +2086,7 @@ def _draw_codex_back_button(
     margin_y: int,
 ) -> pygame.Rect:
     """
-    Styled back button for mouse / keyboard+mouse users.
+    Compact labeled back button for mouse / keyboard+mouse users.
     Hidden entirely in keyboard-only mode (ESC still handles navigation).
     Returns the clickable rect (zero-size if hidden).
     """
@@ -2097,16 +2097,17 @@ def _draw_codex_back_button(
         return pygame.Rect(0, 0, 0, 0)
 
     sc_w = screen.get_width() / 1024.0
-    font  = get_gothic_font(int(22 * sc_w))
-    pad_x = int(20 * sc_w)
-    pad_y = int(8  * sc_w)
+    sc_h = screen.get_height() / 768.0
+    font = get_gothic_font(int(22 * sc_w))
+    pad_x = int(14 * sc_w)
 
-    display_label = f"\u25c4 {label}"          # ◄ LABEL
-    surf_normal   = font.render(display_label, False, C_DIM)
-    surf_hover    = font.render(display_label, False, C_WHITE)
+    display_label = "<"
+    surf_normal = font.render(display_label, False, C_ACCENT)
+    surf_hover = font.render(display_label, False, C_WHITE)
 
-    # Build hit rect centred on the text + padding
-    hit = surf_normal.get_rect(topleft=(margin_x, margin_y)).inflate(pad_x * 2, pad_y * 2)
+    btn_h = int(34 * sc_h)
+    btn_w = int(42 * sc_w)
+    hit = pygame.Rect(margin_x, margin_y, btn_w, btn_h)
 
     mx, my    = pygame.mouse.get_pos()
     is_hov    = hit.collidepoint(mx, my)
@@ -2114,7 +2115,6 @@ def _draw_codex_back_button(
     surf      = surf_hover if is_hov else surf_normal
     text_rect = surf.get_rect(center=hit.center)
 
-    # Bordered box — always visible to mouse users, brighter on hover
     bg_color     = (25, 2, 14)    if is_hov else (12, 4, 18)
     border_color = C_ACCENT       if is_hov else C_ACCENT_DK
     pygame.draw.rect(screen, bg_color,     hit, border_radius=int(4 * sc_w))
@@ -2126,11 +2126,10 @@ def _draw_codex_back_button(
 
 def _draw_codex_title_back_button(
     screen: pygame.Surface,
-    title_rect: pygame.Rect,
     sc_w: float,
     sc_h: float,
 ) -> pygame.Rect:
-    """Compact Codex back button placed beside the title."""
+    """Compact Codex back button fixed at the top-left corner."""
     import settings as cfg
 
     if cfg.input_method == 1:
@@ -2138,12 +2137,8 @@ def _draw_codex_title_back_button(
 
     btn_w = int(42 * sc_w)
     btn_h = int(34 * sc_h)
-    gap = int(12 * sc_w)
-    min_x = int(24 * sc_w)
 
-    hit = pygame.Rect(0, 0, btn_w, btn_h)
-    hit.right = max(min_x + btn_w, title_rect.left - gap)
-    hit.centery = title_rect.centery
+    hit = pygame.Rect(int(24 * sc_w), int(24 * sc_h), btn_w, btn_h)
 
     mx, my = pygame.mouse.get_pos()
     is_hov = hit.collidepoint(mx, my)
@@ -2465,18 +2460,20 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
 
     suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
 
-    # ── Title ────────────────────────────────────────────────────────────────
-    title_font = get_gothic_font(int(48 * sc_w))
-    title_text = get_ui_label("codex_title")
-    title_surf = title_font.render(title_text, False, C_WHITE)
+    # ── Back button (top-left corner) ────────────────────────────────────────
+    global _codex_back_menu_rect
+    _codex_back_menu_rect = _draw_codex_title_back_button(screen, sc_w, sc_h)
+
+    # ── Title (below back button, aligned with carousel) ─────────────────────
+    col_x_title = int(160 * sc_w)
+    btn_bottom  = int(24 * sc_h) + int(34 * sc_h)
+    title_font  = get_gothic_font(int(48 * sc_w))
+    title_text  = get_ui_label("codex_title")
+    title_surf  = title_font.render(title_text, False, C_WHITE)
     shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
-    title_rect = title_surf.get_rect(centerx=int(195 * sc_w), centery=int(52 * sc_h))
+    title_rect  = title_surf.get_rect(centerx=col_x_title, top=btn_bottom + int(10 * sc_h))
     screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_h)))
     screen.blit(title_surf, title_rect)
-
-    # ── Back button beside title ─────────────────────────────────────────────
-    global _codex_back_menu_rect
-    _codex_back_menu_rect = _draw_codex_title_back_button(screen, title_rect, sc_w, sc_h)
 
     # ── Left column: horizontal circular carousel ─────────────────────────────
     card_w_base = int(90 * sc_w)
