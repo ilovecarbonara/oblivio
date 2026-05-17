@@ -2340,13 +2340,6 @@ def draw_codex(
             scaled = pygame.transform.scale(src, (card_w, card_h))
             rotated = pygame.transform.rotate(scaled, rot_deg)
             
-            # Darken if any card is revealed/animating
-            # We use _codex_anim_p to dim the fan
-            if (revealed_card or _codex_anim_p > 0):
-                dark = pygame.Surface(rotated.get_size(), pygame.SRCALPHA)
-                dark.fill((0, 0, 0, int(150 * _codex_anim_p)))
-                rotated.blit(dark, (0, 0))
-                
             r_rect = rotated.get_rect(center=(px, py))
             _codex_rects.append(r_rect)
             
