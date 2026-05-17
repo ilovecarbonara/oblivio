@@ -26,7 +26,8 @@ from score import Score
 MISMATCH_DELAY_MS    = 1000.0  # ms to show mismatched cards before flipping back
 NEXT_ROUND_DELAY_MS  = 1200.0  # ms to wait after last match before starting the next round
 GRACE_MISM_COUNT     = 8    # mismatches allowed in Hellish mode before HP loss starts
-GAME_OVER_DELAY_MS   = 1500.0  # ms to wait after all cards flip before showing GAME OVER screen
+GAME_OVER_PRE_REVEAL_DELAY_MS  = 1000.0  # ms to wait before revealing cards on death
+GAME_OVER_POST_REVEAL_DELAY_MS = 1500.0  # ms to wait after all cards flip before showing GAME OVER screen
 SCORCHED_BURN_DAMAGE_PER_SECOND = 2.0  # HP drained while one Scorched card waits unmatched
 
 
@@ -462,7 +463,7 @@ class Game:
             self._stop_scorched_burn()
             print("[GAME OVER] HP depleted — waiting for reveal animation...")
             self._game_over_pending = True
-            self._game_over_delay   = GAME_OVER_DELAY_MS
+            self._game_over_delay   = GAME_OVER_PRE_REVEAL_DELAY_MS
 
     def update(self, dt_ms: float) -> Optional[list[Card]]:
         """
@@ -504,15 +505,16 @@ class Game:
         if self._game_over_pending:
             self._game_over_delay -= dt_ms
 
-            # On the first frame: flip all remaining face-down cards simultaneously
-            if not self._reveal_all_done:
+            # Reveal all remaining face-down cards after pre-reveal delay
+            if not self._reveal_all_done and self._game_over_delay <= 0:
                 unflipped = [c for c in self.cards if c.state == CardState.FACE_DOWN]
                 for c in unflipped:
                     c.flip()
                 self._reveal_all_done = True
+                self._game_over_delay = GAME_OVER_POST_REVEAL_DELAY_MS
                 return unflipped if unflipped else None
 
-            if self._game_over_delay <= 0:
+            if self._reveal_all_done and self._game_over_delay <= 0:
                 self._game_over_pending = False
                 self._reveal_all_done = False
                 print(f"[GAME OVER] HP depleted — final score: {self.score.total}")
