@@ -130,11 +130,9 @@ def set_for_difficulty(difficulty) -> None:
 
 def invalidate_cache() -> None:
     """Drop cached scaled surface (call after resolution / display changes)."""
-    global _scaled_cache, _scaled_surf, _effect_layer, _effect_layer_size
+    global _scaled_cache, _scaled_surf
     _scaled_cache = None
     _scaled_surf = None
-    _effect_layer = None
-    _effect_layer_size = (0, 0)
 
 
 def _cover_layout(src_w: int, src_h: int, vw: int, vh: int) -> tuple[int, int, int, int]:
@@ -171,195 +169,8 @@ def _rebuild_scaled(vw: int, vh: int) -> None:
     _scaled_cache = (_active, vw, vh)
 
 
-# ---------------------------------------------------------------------------
-# Atmospheric overlays (drawn above the art, below UI veils)
-# ---------------------------------------------------------------------------
-_effect_layer: pygame.Surface | None = None
-_effect_layer_size: tuple[int, int] = (0, 0)
-
-# (x_ratio, y_ratio, phase, drift_y, size_px, rgba)
-_EMBERS_HELLISH = (
-    (0.12, 0.72, 0.0, 0.0009, 2, (255, 90, 20, 55)),
-    (0.28, 0.81, 1.2, 0.0011, 2, (255, 50, 10, 50)),
-    (0.45, 0.68, 2.4, 0.0008, 3, (255, 120, 30, 45)),
-    (0.61, 0.77, 0.8, 0.0010, 2, (220, 40, 8, 48)),
-    (0.78, 0.85, 3.1, 0.0012, 2, (255, 70, 15, 42)),
-    (0.88, 0.70, 1.7, 0.0007, 3, (255, 100, 25, 40)),
-    (0.35, 0.90, 4.0, 0.0013, 1, (255, 140, 40, 38)),
-    (0.55, 0.92, 2.9, 0.0010, 2, (255, 60, 12, 44)),
-    (0.70, 0.65, 0.5, 0.0009, 2, (200, 30, 5, 36)),
-    (0.18, 0.88, 3.6, 0.0011, 1, (255, 110, 35, 35)),
-)
-
-_EMBERS_SCORCHED = (
-    (0.15, 0.78, 0.3, 0.0007, 2, (255, 130, 40, 42)),
-    (0.32, 0.86, 1.5, 0.0008, 2, (255, 100, 25, 38)),
-    (0.50, 0.74, 2.1, 0.0006, 2, (230, 80, 20, 36)),
-    (0.68, 0.82, 0.9, 0.0009, 2, (255, 115, 35, 40)),
-    (0.82, 0.76, 2.8, 0.0007, 1, (255, 150, 50, 32)),
-    (0.42, 0.91, 3.4, 0.0008, 1, (255, 90, 20, 34)),
-)
-
-_MOTES_MORTAL = (
-    (0.20, 0.35, 0.0, 0.0005, 2, (180, 210, 230, 28)),
-    (0.38, 0.28, 1.4, 0.0004, 1, (160, 195, 220, 24)),
-    (0.55, 0.42, 2.2, 0.0006, 2, (200, 225, 240, 26)),
-    (0.72, 0.32, 0.7, 0.0005, 1, (170, 200, 225, 22)),
-    (0.85, 0.38, 3.0, 0.0004, 2, (190, 215, 235, 25)),
-    (0.30, 0.48, 2.5, 0.0005, 1, (150, 185, 210, 20)),
-    (0.62, 0.22, 1.1, 0.0004, 2, (175, 205, 228, 23)),
-    (0.48, 0.18, 3.8, 0.0003, 1, (165, 195, 218, 18)),
-)
-
-_MOTES_DEFAULT = (
-    (0.25, 0.55, 0.5, 0.0003, 1, (140, 120, 160, 22)),
-    (0.50, 0.45, 1.8, 0.00035, 1, (120, 100, 150, 18)),
-    (0.75, 0.50, 2.6, 0.0003, 1, (130, 110, 155, 20)),
-    (0.40, 0.62, 3.2, 0.00028, 1, (110, 90, 140, 16)),
-)
-
-
-def _ensure_effect_layer(vw: int, vh: int) -> pygame.Surface:
-    global _effect_layer, _effect_layer_size
-    if _effect_layer is None or _effect_layer_size != (vw, vh):
-        _effect_layer = pygame.Surface((vw, vh), pygame.SRCALPHA)
-        _effect_layer_size = (vw, vh)
-    else:
-        _effect_layer.fill((0, 0, 0, 0))
-    return _effect_layer
-
-
-def _blit_particles(
-    layer: pygame.Surface,
-    vw: int,
-    vh: int,
-    t: float,
-    specs: tuple,
-) -> None:
-    for xr, yr, phase, drift, size, rgba in specs:
-        y = (yr - ((t + phase * 40) * drift) % 1.2) % 1.2
-        if y > 1.0:
-            continue
-        x = xr + 0.012 * math.sin(t * 0.04 + phase * 2.1)
-        px = int(x * vw) & ~1
-        py = int(y * vh) & ~1
-        flicker = 0.75 + 0.25 * math.sin(t * 0.08 + phase)
-        a = max(0, min(255, int(rgba[3] * flicker)))
-        pygame.draw.rect(layer, (*rgba[:3], a), (px, py, size, size))
-
-
-def _mist_blobs(
-    layer: pygame.Surface,
-    vw: int,
-    vh: int,
-    t: float,
-    blobs: tuple[tuple[float, float, float, tuple[int, int, int, int]]],
-) -> None:
-    for xr, yr, br_ratio, rgba in blobs:
-        ox = int(12 * math.sin(t * 0.025 + xr * 10))
-        oy = int(8 * math.cos(t * 0.02 + yr * 8))
-        cx = int(xr * vw) + ox
-        cy = int(yr * vh) + oy
-        br = int(br_ratio * min(vw, vh) * (1.0 + 0.05 * math.sin(t * 0.03 + xr)))
-        pygame.draw.circle(layer, rgba, (cx, cy), max(8, br))
-
-
-def _heat_shimmer(
-    layer: pygame.Surface,
-    vw: int,
-    vh: int,
-    t: float,
-    band_count: int,
-    alpha: int,
-) -> None:
-    for i in range(band_count):
-        y_ratio = 0.55 + i * 0.08
-        y = int(y_ratio * vh) + int(3 * math.sin(t * 0.06 + i * 1.7))
-        y &= ~1
-        shift = int(4 * math.sin(t * 0.05 + i * 2.3))
-        a = alpha + int(6 * math.sin(t * 0.07 + i))
-        pygame.draw.rect(
-            layer,
-            (255, 140, 60, max(0, min(255, a))),
-            (shift, y, vw, 2),
-        )
-
-
-def _tint_pulse(layer: pygame.Surface, vw: int, vh: int, t: float, rgba: tuple[int, int, int, int]) -> None:
-    pulse = 0.5 + 0.5 * math.sin(t * 0.04)
-    a = int(rgba[3] * (0.65 + 0.35 * pulse))
-    layer.fill((*rgba[:3], max(0, min(255, a))))
-
-
-def _draw_fx_default(layer: pygame.Surface, vw: int, vh: int, t: float) -> None:
-    _mist_blobs(
-        layer, vw, vh, t,
-        (
-            (0.35, 0.72, 0.22, (35, 20, 50, 18)),
-            (0.65, 0.78, 0.18, (28, 15, 42, 14)),
-            (0.50, 0.35, 0.14, (22, 12, 38, 10)),
-        ),
-    )
-    _blit_particles(layer, vw, vh, t, _MOTES_DEFAULT)
-    torch = int(28 + 10 * math.sin(t * 0.09))
-    for tx in (int(vw * 0.08), int(vw * 0.92)):
-        pygame.draw.rect(layer, (255, 160, 70, torch), (tx, int(vh * 0.62) & ~1, 2, 2))
-        pygame.draw.rect(layer, (255, 100, 30, torch // 2), (tx, (int(vh * 0.62) + 4) & ~1, 1, 1))
-
-
-def _draw_fx_mortal(layer: pygame.Surface, vw: int, vh: int, t: float) -> None:
-    _tint_pulse(layer, vw, vh, t, (40, 55, 75, 8))
-    _mist_blobs(
-        layer, vw, vh, t,
-        (
-            (0.40, 0.30, 0.20, (60, 80, 100, 16)),
-            (0.60, 0.25, 0.16, (50, 70, 95, 12)),
-            (0.30, 0.55, 0.24, (45, 65, 90, 14)),
-        ),
-    )
-    _blit_particles(layer, vw, vh, t, _MOTES_MORTAL)
-
-
-def _draw_fx_scorched(layer: pygame.Surface, vw: int, vh: int, t: float) -> None:
-    _tint_pulse(layer, vw, vh, t, (80, 30, 5, 10))
-    _heat_shimmer(layer, vw, vh, t, 4, 10)
-    _blit_particles(layer, vw, vh, t, _EMBERS_SCORCHED)
-
-
-def _draw_fx_hellish(layer: pygame.Surface, vw: int, vh: int, t: float) -> None:
-    _mist_blobs(
-        layer, vw, vh, t,
-        (
-            (0.45, 0.70, 0.20, (40, 5, 5, 20)),
-            (0.70, 0.75, 0.16, (35, 3, 3, 16)),
-        ),
-    )
-    _heat_shimmer(layer, vw, vh, t, 5, 14)
-    _blit_particles(layer, vw, vh, t, _EMBERS_HELLISH)
-    flicker = int(12 + 8 * math.sin(t * 0.12))
-    layer.fill((120, 15, 0, flicker), special_flags=pygame.BLEND_RGBA_ADD)
-
-
-_FX_DRAWERS = {
-    BackgroundId.DEFAULT:  _draw_fx_default,
-    BackgroundId.MORTAL:   _draw_fx_mortal,
-    BackgroundId.SCORCHED: _draw_fx_scorched,
-    BackgroundId.HELLISH:  _draw_fx_hellish,
-}
-
-
-def _draw_effects(screen: pygame.Surface, t: float) -> None:
-    vw, vh = screen.get_size()
-    if vw <= 0 or vh <= 0:
-        return
-    layer = _ensure_effect_layer(vw, vh)
-    drawer = _FX_DRAWERS.get(_active, _draw_fx_default)
-    drawer(layer, vw, vh, t)
-    screen.blit(layer, (0, 0))
-
-
 def draw(screen: pygame.Surface, t: float = 0) -> None:
-    """Blit the active background and subtle atmospheric overlay to *screen*."""
+    """Blit the active background to *screen*."""
     global _fade_p, _fade_last_ticks, _fade_prev_surf
     if not _sources:
         return
@@ -384,18 +195,9 @@ def draw(screen: pygame.Surface, t: float = 0) -> None:
             _scaled_surf.set_alpha(int(255 * _fade_p))
             screen.blit(_scaled_surf, _blit_pos)
             _scaled_surf.set_alpha(255)
-            
-            # Effects fade
-            layer = _ensure_effect_layer(vw, vh)
-            drawer = _FX_DRAWERS.get(_active, _draw_fx_default)
-            drawer(layer, vw, vh, t)
-            layer.set_alpha(int(255 * _fade_p))
-            screen.blit(layer, (0, 0))
-            layer.set_alpha(255)
     else:
         if _scaled_surf is not None:
             screen.blit(_scaled_surf, _blit_pos)
-        _draw_effects(screen, t)
 
 
 def active() -> BackgroundId:
