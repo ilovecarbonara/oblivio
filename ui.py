@@ -2124,6 +2124,42 @@ def _draw_codex_back_button(
     return hit
 
 
+def _draw_codex_title_back_button(
+    screen: pygame.Surface,
+    title_rect: pygame.Rect,
+    sc_w: float,
+    sc_h: float,
+) -> pygame.Rect:
+    """Compact Codex back button placed beside the title."""
+    import settings as cfg
+
+    if cfg.input_method == 1:
+        return pygame.Rect(0, 0, 0, 0)
+
+    btn_w = int(42 * sc_w)
+    btn_h = int(34 * sc_h)
+    gap = int(12 * sc_w)
+    min_x = int(24 * sc_w)
+
+    hit = pygame.Rect(0, 0, btn_w, btn_h)
+    hit.right = max(min_x + btn_w, title_rect.left - gap)
+    hit.centery = title_rect.centery
+
+    mx, my = pygame.mouse.get_pos()
+    is_hov = hit.collidepoint(mx, my)
+
+    bg_color = (25, 2, 14) if is_hov else (12, 4, 18)
+    border_color = C_ACCENT if is_hov else C_ACCENT_DK
+    label_color = C_WHITE if is_hov else C_ACCENT
+    pygame.draw.rect(screen, bg_color, hit, border_radius=int(4 * sc_w))
+    pygame.draw.rect(screen, border_color, hit, max(1, int(2 * sc_w)), border_radius=int(4 * sc_w))
+
+    font = get_gothic_font(int(22 * sc_w))
+    label_s = font.render("<", False, label_color)
+    screen.blit(label_s, label_s.get_rect(center=hit.center))
+    return hit
+
+
 def get_hovered_codex_back(mx: int, my: int) -> str | None:
     """'menu' = return to main menu, 'lineage' = return to suit select."""
     if _codex_back_menu_rect and _codex_back_menu_rect.collidepoint(mx, my):
@@ -2432,6 +2468,10 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
     screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_h)))
     screen.blit(title_surf, title_rect)
 
+    # ── Back button beside title ─────────────────────────────────────────────
+    global _codex_back_menu_rect
+    _codex_back_menu_rect = _draw_codex_title_back_button(screen, title_rect, sc_w, sc_h)
+
     # ── Left column: horizontal circular carousel ─────────────────────────────
     card_w_base = int(90 * sc_w)
     card_h_base = int(135 * sc_w)
@@ -2616,13 +2656,6 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
     if can_scroll_dn:
         dn_s = arrow_font.render("\u25bc", False, C_ACCENT)
         screen.blit(dn_s, dn_s.get_rect(right=arr_x, bottom=desc_top + avail_h))
-
-    # ── Back button ───────────────────────────────────────────────────────────
-    global _codex_back_menu_rect
-    _codex_back_menu_rect = _draw_codex_back_button(
-        screen, get_ui_label("codex_back_menu"), int(24 * sc_w), int(24 * sc_h),
-    )
-
 
 def get_hovered_codex_item(mx: int, my: int) -> tuple[str, int] | None:
     """Returns ('suit', idx) or ('card', idx) or None."""
