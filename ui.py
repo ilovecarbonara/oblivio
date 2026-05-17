@@ -2262,26 +2262,32 @@ def draw_codex(
     sc_w = w / 1024.0
     sc_h = h / 768.0
     
-    # Title
-    title_font = get_gothic_font(int(48 * sc_w))
-    title_text = get_ui_label("codex_title")
-    title_surf = title_font.render(title_text, False, C_WHITE)
-    shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
-    title_rect = title_surf.get_rect(centerx=cx, centery=int(50 * sc_h))
-    screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_w)))
-    screen.blit(title_surf, title_rect)
-    
-    # Suit Label (instead of selector)
     suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
     suit_name = suits[suit_idx]
-    suit_font = get_gothic_font(int(28 * sc_w))
-    s_surf = suit_font.render(suit_name.upper(), False, C_WHITE)
-    s_rect = s_surf.get_rect(centerx=cx, centery=title_rect.bottom + int(40 * sc_h))
-    screen.blit(s_surf, s_rect)
-    
-    # Static accent line below suit name
-    line_y = s_rect.bottom + int(5 * sc_h)
-    pygame.draw.line(screen, C_ACCENT, (s_rect.left - 20, line_y), (s_rect.right + 20, line_y), max(1, int(2 * sc_w)))
+
+    # Centered lineage title
+    title_text = suit_name.upper()
+    title_size = int(74 * sc_w)
+    title_font = get_gothic_font(title_size)
+    max_title_w = int(w * 0.78)
+    while title_font.size(title_text)[0] > max_title_w and title_size > int(42 * sc_w):
+        title_size -= 2
+        title_font = get_gothic_font(title_size)
+
+    title_surf = title_font.render(title_text, False, C_WHITE)
+    shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
+    title_rect = title_surf.get_rect(center=(cx, int(h * 0.22)))
+    screen.blit(shadow_surf, (title_rect.x + int(4 * sc_w), title_rect.y + int(4 * sc_h)))
+    screen.blit(title_surf, title_rect)
+
+    line_y = title_rect.bottom + int(10 * sc_h)
+    pygame.draw.line(
+        screen,
+        C_ACCENT,
+        (title_rect.left - int(28 * sc_w), line_y),
+        (title_rect.right + int(28 * sc_w), line_y),
+        max(1, int(2 * sc_w)),
+    )
 
     # ── Back to Lineage button (top-left corner; hidden in keyboard-only mode) ──
     global _codex_back_lineage_rect
