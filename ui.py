@@ -1692,9 +1692,7 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_n
     global _result_rects, _result_anim_timer
     _result_rects.clear()
 
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)
+    _draw_themed_background(screen, veil_alpha=155, frame=frame)
 
     # ── Animation Timings ────────────────────────────────────────────────
     t = _result_anim_timer
