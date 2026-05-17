@@ -2062,31 +2062,42 @@ def _draw_codex_back_button(
     margin_x: int,
     margin_y: int,
 ) -> pygame.Rect:
-    """Gothic text back control for mouse users; returns clickable rect."""
+    """
+    Styled back button for mouse / keyboard+mouse users.
+    Hidden entirely in keyboard-only mode (ESC still handles navigation).
+    Returns the clickable rect (zero-size if hidden).
+    """
     import settings as cfg
+
+    # Keyboard-only: don't render — ESC handles back navigation
+    if cfg.input_method == 1:
+        return pygame.Rect(0, 0, 0, 0)
+
     sc_w = screen.get_width() / 1024.0
-    font = get_gothic_font(int(22 * sc_w))
-    pad_x = int(16 * sc_w)
-    pad_y = int(10 * sc_w)
+    font  = get_gothic_font(int(22 * sc_w))
+    pad_x = int(20 * sc_w)
+    pad_y = int(8  * sc_w)
 
-    plain = font.render(label, False, C_DIM)
-    active = font.render(f"> {label}", False, C_WHITE)
-    hit = plain.get_rect(topleft=(margin_x, margin_y)).inflate(pad_x, pad_y)
+    display_label = f"\u25c4 {label}"          # ◄ LABEL
+    surf_normal   = font.render(display_label, False, C_DIM)
+    surf_hover    = font.render(display_label, False, C_WHITE)
 
-    mx, my = pygame.mouse.get_pos()
-    is_hov = False
-    if cfg.input_method != 1:  # Not pure keyboard
-        is_hov = hit.collidepoint(mx, my)
+    # Build hit rect centred on the text + padding
+    hit = surf_normal.get_rect(topleft=(margin_x, margin_y)).inflate(pad_x * 2, pad_y * 2)
 
-    surf = active if is_hov else plain
-    at = surf.get_rect(topleft=(margin_x, margin_y))
+    mx, my    = pygame.mouse.get_pos()
+    is_hov    = hit.collidepoint(mx, my)
 
-    if is_hov:
-        box = at.inflate(pad_x, pad_y)
-        pygame.draw.rect(screen, (25, 2, 14), box)
-        pygame.draw.rect(screen, C_ACCENT, box, max(1, int(2 * sc_w)))
+    surf      = surf_hover if is_hov else surf_normal
+    text_rect = surf.get_rect(center=hit.center)
 
-    screen.blit(surf, at)
+    # Bordered box — always visible to mouse users, brighter on hover
+    bg_color     = (25, 2, 14)    if is_hov else (12, 4, 18)
+    border_color = C_ACCENT       if is_hov else C_ACCENT_DK
+    pygame.draw.rect(screen, bg_color,     hit, border_radius=int(4 * sc_w))
+    pygame.draw.rect(screen, border_color, hit, max(1, int(2 * sc_w)), border_radius=int(4 * sc_w))
+
+    screen.blit(surf, text_rect)
     return hit
 
 
@@ -2182,6 +2193,16 @@ def draw_codex(
     # Static accent line below suit name
     line_y = s_rect.bottom + int(5 * sc_h)
     pygame.draw.line(screen, C_ACCENT, (s_rect.left - 20, line_y), (s_rect.right + 20, line_y), max(1, int(2 * sc_w)))
+
+    # ── Back to Lineage button (top-left corner; hidden in keyboard-only mode) ──
+    global _codex_back_lineage_rect
+    if not revealed_card:
+        _codex_back_lineage_rect = _draw_codex_back_button(
+            screen,
+            get_ui_label("codex_back_lineage"),
+            int(24 * sc_w),
+            int(24 * sc_h),
+        )
 
     # Fan Layout Parameters
     # We want the cards to fan out from the bottom center.
@@ -2336,19 +2357,6 @@ def draw_codex(
                 hint_surf.set_alpha(lore_alpha)
                 screen.blit(hint_surf, hint_surf.get_rect(left=cx - int(100 * sc_w), top=ly + int(30 * sc_h)))
 
-    # Back to lineages (mouse + keyboard hint)
-    if not revealed_card and _codex_anim_p == 0:
-        global _codex_back_lineage_rect
-        margin = int(24 * sc_w)
-        _codex_back_lineage_rect = _draw_codex_back_button(
-            screen, get_ui_label("codex_back_lineage"), margin, margin,
-        )
-        hint_font = get_gothic_font(int(16 * sc_w))
-        hint_text = "Press ESC to return to lineages"
-        hint_surf = hint_font.render(hint_text, False, C_DIM)
-        screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(20 * sc_h)))
-
-
 def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: int) -> None:
     """Draw 4 stacks of cards, one for each suit."""
     global _codex_rects, _suit_rects
@@ -2415,12 +2423,6 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
         )
         l_surf = label_font.render(suit.upper(), False, t_c)
         screen.blit(l_surf, l_surf.get_rect(centerx=dx, top=dy + deck_h // 2 + int(30 * sc_h)))
-
-    # Hint
-    hint_font = get_gothic_font(int(18 * sc_w))
-    hint_text = "Select a suit to view registry"
-    hint_surf = hint_font.render(hint_text, False, C_ACCENT)
-    screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
 
     global _codex_back_menu_rect
     margin = int(24 * sc_w)
