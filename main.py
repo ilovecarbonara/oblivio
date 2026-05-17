@@ -984,6 +984,8 @@ def main() -> None:
             screen.fill((0, 0, 0))
             screen.blit(snap, (ox, oy))
 
+        ui.draw_mismatch_vignette(screen)
+
         pygame.display.flip()
         dt_ms = clock.tick(TARGET_FPS)
 

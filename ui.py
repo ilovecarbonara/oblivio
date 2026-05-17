@@ -503,6 +503,53 @@ def draw_danger_vignette(screen: pygame.Surface, hp: float, frame: int) -> None:
     screen.blit(vsurf, (0, 0))
 
 
+def draw_mismatch_vignette(screen: pygame.Surface) -> None:
+    """Draw a red flash on the corners during a screen shake."""
+    global _shake_frames
+    if _shake_frames <= 0:
+        return
+
+    w, h = screen.get_size()
+    
+    # Base alpha based on shake frames (1.0 -> 0.0)
+    t = _shake_frames / _SHAKE_MAX
+    base_alpha = int(200 * t)  # Max opacity of 200 at peak shake
+
+    if base_alpha <= 0:
+        return
+
+    # Create the vignette surface (solid red)
+    vsurf = pygame.Surface((w, h), pygame.SRCALPHA)
+    vsurf.fill((160, 0, 0, base_alpha))
+    
+    # Create a mask to isolate ONLY the four corners
+    mask = pygame.Surface((w, h), pygame.SRCALPHA)
+    mask.fill((0, 0, 0, 0)) # Start fully transparent
+    
+    # Configuration for corner glows
+    corner_r = int(min(w, h) * 0.45) 
+    corners = [(0, 0), (w, 0), (0, h), (w, h)]
+    bands = 32
+    
+    for cx, cy in corners:
+        dx = 1 if cx == 0 else -1
+        dy = 1 if cy == 0 else -1
+        
+        for i in range(1, bands + 1):
+            t_band = i / bands
+            r = int(corner_r * (1.0 - t_band + 1.0/bands))
+            alpha = int(255 * (t_band ** 1.5))
+            
+            pts = [
+                (cx, cy),
+                (cx + dx * r, cy),
+                (cx, cy + dy * r)
+            ]
+            pygame.draw.polygon(mask, (255, 255, 255, alpha), pts)
+
+    vsurf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    screen.blit(vsurf, (0, 0))
+
 
 # ---------------------------------------------------------------------------
 # Card preview  —  flip all cards face-up at game start, then flip back
