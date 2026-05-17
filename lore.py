@@ -77,3 +77,142 @@ def get_title(suit: str, rank: str) -> str:
     if isinstance(data, tuple):
         return data[0]
     return f"{rank} of {suit}"
+
+
+# ---------------------------------------------------------------------------
+# Lineage descriptions (shown on the suit-select screen)
+# Each entry is a list[str] where "" = paragraph gap and lines starting/
+# ending with '"' are rendered as accent-coloured quotes.
+# ---------------------------------------------------------------------------
+LINEAGE_LORE: dict[str, list[str]] = {
+    "Grafted": [
+        '"When flesh failed, they refused to."',
+        "",
+        "They were once the healers of the old kingdoms.",
+        "",
+        "Field surgeons, alchemists, corpse-keepers, and anatomists — those who studied the weakness of flesh so others might survive war.",
+        "",
+        "Then came the first symptoms of the Bloom.",
+        "",
+        "Bones softened.",
+        "Muscles tore under their own weight.",
+        "Blood forgot how to clot.",
+        "",
+        "At first, their methods were called miracles.",
+        "",
+        "A broken limb replaced with iron.",
+        "A ruined hand reforged with bone and tendon.",
+        "A dying soldier returned to battle.",
+        "",
+        "But survival became obsession.",
+        "",
+        "And obsession became doctrine.",
+        "",
+        "By the time the courts condemned them, the Grafted no longer healed bodies.",
+        "",
+        "They improved them.",
+        "",
+        '"When the Bloom entered the blood, they answered with steel and sinew."',
+    ],
+    "Arcanum": [
+        '"They sought to name the dark."',
+        "",
+        "They were the scholars of the celestial courts.",
+        "",
+        "Astrologers, archivists, philosophers, and royal magi — keepers of truths too dangerous for kings.",
+        "",
+        "When the stars first shifted, they were the only ones who noticed.",
+        "",
+        "Constellations disappeared.",
+        "Moons drifted from their paths.",
+        "The sky began remembering colors no mortal tongue could name.",
+        "",
+        "The Arcanum believed knowledge would save them.",
+        "",
+        "They built observatories.",
+        "Charted impossible skies.",
+        "Spoke formulas that bent light and memory.",
+        "",
+        "And for a time...",
+        "",
+        "they believed they understood the Bloom.",
+        "",
+        "Then the Bloom began answering.",
+        "",
+        "Many lost their shadows.",
+        "Some forgot their names.",
+        "The wisest forgot the difference.",
+        "",
+        '"The first to witness the Bloom were the first to speak with it."',
+    ],
+    "Hollow": [
+        '"Most were not warriors. Most were forgotten."',
+        "",
+        "They were everyone else.",
+        "",
+        "Farmers. Blacksmiths. Mothers. Pilgrims. Children.",
+        "",
+        "They built the roads the knights marched on.",
+        "Harvested the grain that fed the courts.",
+        "Rang the bells that marked the passing years.",
+        "",
+        "When the Bloom spread, it did not strike them with fire or steel.",
+        "",
+        "It erased them.",
+        "",
+        "Names faded first.",
+        "",
+        "Then faces.",
+        "",
+        "Then memories.",
+        "",
+        "Families sat together and failed to recognize one another.",
+        "",
+        "Villages stood untouched — yet no one remembered who lived there.",
+        "",
+        "Now the Hollow wander roads that once led home, clutching relics whose meaning has long since died.",
+        "",
+        '"When the bells stopped ringing, no one remembered why they had bells at all."',
+    ],
+    "Sundered": [
+        '"When the sky turned violet, their vows broke first."',
+        "",
+        "They were the last knights of the old crowns.",
+        "",
+        "Sworn to kings, scripture, and blood.",
+        "",
+        "When the Bloom reached the royal courts, the rulers began to change.",
+        "",
+        "Kings forgot their heirs.",
+        "Priests forgot their scripture.",
+        "Generals forgot who the enemy was.",
+        "",
+        "The Sundered were forced to choose:",
+        "",
+        "Obey madness...",
+        "or break their oaths.",
+        "",
+        "Some drew steel against their own rulers.",
+        "",
+        "Some defended the innocent.",
+        "",
+        "Some slaughtered entire courts to prevent what came next.",
+        "",
+        "None were forgiven.",
+        "",
+        "And when the kingdoms fell, history remembered them only as traitors.",
+        "",
+        '"The first oath shattered before the first kingdom burned."',
+    ],
+}
+
+
+def get_lineage_lore(suit: str) -> list[str]:
+    """Return the structured lore lines for a lineage (suit).
+
+    Each entry is either:
+      - ""          → paragraph gap (extra vertical space)
+      - A string starting and ending with '"' → accent-coloured quote
+      - Any other string → normal body text (word-wrapped by the renderer)
+    """
+    return LINEAGE_LORE.get(suit, ["A lineage lost to the void."])

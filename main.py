@@ -256,9 +256,7 @@ def main() -> None:
                     res = ui.get_hovered_codex_item(mx, my)
                     if res:
                         type, idx = res
-                        if type == "suit":
-                            codex_suit_idx = idx
-                        else:
+                        if type == "card":
                             codex_selected = idx
 
             elif event.type == pygame.KEYDOWN:
@@ -350,9 +348,8 @@ def main() -> None:
                         options_selected = (options_selected - 1) % _OPTIONS_ROW_COUNT
                     elif game.state == GameState.CODEX:
                         if not codex_revealed_card:
-                            # In fan layout, UP/DOWN could be used to exit? 
-                            # Or just ignore for now.
-                            pass
+                            if codex_view_mode == 0:
+                                ui.scroll_codex_desc(-1)
 
                 # =====================================================
                 # DOWN / S
@@ -376,8 +373,8 @@ def main() -> None:
                         options_selected = (options_selected + 1) % _OPTIONS_ROW_COUNT
                     elif game.state == GameState.CODEX:
                         if not codex_revealed_card:
-                            # Same as UP
-                            pass
+                            if codex_view_mode == 0:
+                                ui.scroll_codex_desc(+1)
 
                 # =====================================================
                 # LEFT / A
@@ -396,15 +393,11 @@ def main() -> None:
                     elif game.state == GameState.CODEX:
                         if not codex_revealed_card:
                             if codex_view_mode == 0:
-                                # Deck select - move between decks
-                                if event.key in (pygame.K_LEFT, pygame.K_a):
-                                    codex_suit_idx = (codex_suit_idx - 1) % 4
-                                elif event.key in (pygame.K_RIGHT, pygame.K_d):
-                                    codex_suit_idx = (codex_suit_idx + 1) % 4
+                                audio.sfx_cursor()
+                                codex_suit_idx = (codex_suit_idx - 1) % 4
+                                ui.reset_codex_desc_scroll()
                             else:
-                                # Fan view - only move between cards
-                                if event.key == pygame.K_LEFT:
-                                    codex_selected = (codex_selected - 1) % 13
+                                codex_selected = (codex_selected - 1) % 13
 
                 # =====================================================
                 # RIGHT / D
@@ -423,12 +416,11 @@ def main() -> None:
                     elif game.state == GameState.CODEX:
                         if not codex_revealed_card:
                             if codex_view_mode == 0:
-                                # Handled in LEFT branch (D/RIGHT)
-                                if event.key in (pygame.K_RIGHT, pygame.K_d, pygame.K_TAB):
-                                    codex_suit_idx = (codex_suit_idx + 1) % 4
+                                audio.sfx_cursor()
+                                codex_suit_idx = (codex_suit_idx + 1) % 4
+                                ui.reset_codex_desc_scroll()
                             else:
-                                if event.key == pygame.K_RIGHT:
-                                    codex_selected = (codex_selected + 1) % 13
+                                codex_selected = (codex_selected + 1) % 13
 
                 # =====================================================
                 # ENTER / SPACE / MOUSE SELECT -> MOVED OUTSIDE KEYDOWN
@@ -460,6 +452,7 @@ def main() -> None:
                             codex_suit_idx = 0
                             codex_view_mode = 0
                             codex_revealed_card = None
+                            ui.reset_codex_desc_scroll()
                         ui.start_transition(_to_codex_cb)
                     elif menu_selected == 2:       # OPTIONS
                         audio.sfx_select()
@@ -705,8 +698,22 @@ def main() -> None:
                             audio.sfx_flip()
                             codex_view_mode = 0
                             codex_revealed_card = None
-                        elif ui.get_hovered_codex_item(mx, my) is not None:
-                            valid_click = True
+                        else:
+                            lineage_nav = ui.get_hovered_codex_lineage_nav(mx, my)
+                            if lineage_nav == "prev":
+                                audio.sfx_cursor()
+                                codex_suit_idx = (codex_suit_idx - 1) % 4
+                                ui.reset_codex_desc_scroll()
+                            elif lineage_nav == "next":
+                                audio.sfx_cursor()
+                                codex_suit_idx = (codex_suit_idx + 1) % 4
+                                ui.reset_codex_desc_scroll()
+                            else:
+                                codex_item = ui.get_hovered_codex_item(mx, my)
+                                if codex_item is not None:
+                                    item_type, item_idx = codex_item
+                                    if item_type == "card" or item_idx == codex_suit_idx:
+                                        valid_click = True
                         
                     if valid_click:
                         pygame.event.post(pygame.event.Event(EVENT_SELECT))
