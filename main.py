@@ -328,7 +328,7 @@ def main() -> None:
                             audio.sfx_flip()
                             codex_revealed_card = None
                         elif codex_view_mode == 1:
-                            audio.sfx_flip()
+                            audio.sfx_cancel()
                             codex_view_mode = 0
                         else:
                             audio.sfx_cancel()
@@ -707,7 +707,7 @@ def main() -> None:
                                 game.to_menu()
                             ui.start_transition(_to_menu_cb)
                         elif back == "lineage":
-                            audio.sfx_flip()
+                            audio.sfx_cancel()
                             codex_view_mode = 0
                             codex_revealed_card = None
                         else:
