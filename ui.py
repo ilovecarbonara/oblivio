@@ -2193,8 +2193,8 @@ def draw_codex(
     ranks = _RANKS
     suit = suits[suit_idx]
     
-    card_w = int(90 * sc_w)
-    card_h = int(140 * sc_w)
+    card_w = int(110 * sc_w)
+    card_h = int(170 * sc_w)
     
     for i, rank in enumerate(ranks):
         is_sel = (i == selected_idx)
@@ -2253,7 +2253,7 @@ def draw_codex(
         start_rot = -math.degrees(angle_offset)
         
         # End (Left side) position
-        end_x = cx - int(200 * sc_w)
+        end_x = cx - int(280 * sc_w)
         end_y = h // 2
         end_rot = 0
 
@@ -2304,7 +2304,7 @@ def draw_codex(
                 name_surf = name_font.render(name_text, False, C_WHITE)
                 name_surf.set_alpha(lore_alpha)
                 # Position on the right side
-                screen.blit(name_surf, name_surf.get_rect(left=cx - int(20 * sc_w), top=end_y - large_h // 2))
+                screen.blit(name_surf, name_surf.get_rect(left=cx - int(100 * sc_w), top=end_y - large_h // 2))
 
                 # Lore text
                 l_text = lore.get_lore(asuit, arank)
@@ -2326,7 +2326,7 @@ def draw_codex(
                 for line in lines:
                     ls = lore_font.render(line, False, C_DIM)
                     ls.set_alpha(lore_alpha)
-                    screen.blit(ls, ls.get_rect(left=cx - int(20 * sc_w), top=ly))
+                    screen.blit(ls, ls.get_rect(left=cx - int(100 * sc_w), top=ly))
                     ly += int(28 * sc_h)
 
                 # Instruction to close
@@ -2334,7 +2334,7 @@ def draw_codex(
                 hint_text = "Press SPACE or ESC to close"
                 hint_surf = hint_font.render(hint_text, False, C_ACCENT)
                 hint_surf.set_alpha(lore_alpha)
-                screen.blit(hint_surf, hint_surf.get_rect(left=cx - int(20 * sc_w), top=ly + int(30 * sc_h)))
+                screen.blit(hint_surf, hint_surf.get_rect(left=cx - int(100 * sc_w), top=ly + int(30 * sc_h)))
 
     # Back to lineages (mouse + keyboard hint)
     if not revealed_card and _codex_anim_p == 0:
