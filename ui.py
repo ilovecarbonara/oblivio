@@ -1958,9 +1958,9 @@ def draw_powerup_select(screen: pygame.Surface, selected: int, frame: int) -> No
     global _powerup_rects
     _powerup_rects.clear()
 
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)
+    import backgrounds
+    backgrounds.set_active(backgrounds.BackgroundId.HELLISH)
+    _draw_themed_background(screen, veil_alpha=155, frame=frame // 4)
 
     if _font_title is None or _font_lg is None or _font_sm is None:
         return
