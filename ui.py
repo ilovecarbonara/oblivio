@@ -705,31 +705,45 @@ def draw_perfection_popup(screen: pygame.Surface) -> None:
     # Progress: 0.0 (start) -> 1.0 (end)
     t = 1.0 - (_perf_timer / PERF_DURATION_MS)
     
-    # Animation: scale up and fade out
-    # Starts big and fades in, then stays, then fades out?
-    # Let's do:
-    # 0.0 - 0.2: Fade in & Scale up (overshoot)
-    # 0.2 - 0.8: Hold & pulse
-    # 0.8 - 1.0: Fade out & Scale up further
-    
     alpha = 255
     scale = 1.0
     
     if t < 0.2:
-        # Intro
+        # Intro: Elastic Overshoot
         sub_t = t / 0.2
         alpha = int(255 * sub_t)
-        scale = 0.5 + 0.6 * sub_t   # starts small, grows to 1.1
+        
+        # Elastic ease out formula
+        c4 = (2 * math.pi) / 3
+        if sub_t == 0:
+            ease = 0.0
+        elif sub_t == 1:
+            ease = 1.0
+        else:
+            ease = math.pow(2, -10 * sub_t) * math.sin((sub_t * 10 - 0.75) * c4) + 1.0
+            
+        # Map ease 0..1 to scale 0.1..1.2
+        scale = 0.1 + (1.1 * ease)
     elif t < 0.8:
         # Hold
         alpha = 255
-        scale = 1.1 + 0.05 * math.sin(t * 20)  # gentle pulse
+        scale = 1.2 + 0.03 * math.sin(t * 20)  # gentle pulse
     else:
         # Outro
         sub_t = (t - 0.8) / 0.2
         alpha = int(255 * (1.0 - sub_t))
-        scale = 1.1 + 0.3 * sub_t   # expands as it vanishes
+        scale = 1.2 + 0.5 * sub_t   # expands as it vanishes
         
+    # We can interpolate colors during the hold phase for a glow effect
+    color_anim = C_ACCENT
+    if 0.2 <= t < 0.8:
+        # Pulse between accent and white/gold
+        pulse = (math.sin(t * 15) + 1) / 2 # 0.0 to 1.0
+        r = int(C_ACCENT[0] + pulse * (255 - C_ACCENT[0]))
+        g = int(C_ACCENT[1] + pulse * (255 - C_ACCENT[1]))
+        b = int(C_ACCENT[2] + pulse * (255 - C_ACCENT[2]))
+        color_anim = (r, g, b)
+
     label = get_ui_label("perfection_title")
     
     # Render with layers
@@ -738,44 +752,47 @@ def draw_perfection_popup(screen: pygame.Surface) -> None:
     DEPTH     = 8
     OUTLINE   = 2
     
-    # Base surface
-    base_surf = _font_title.render(label, False, C_ACCENT)
-    
-    # Scaling
-    sw = int(base_surf.get_width() * scale)
-    sh = int(base_surf.get_height() * scale)
-    if sw <= 0 or sh <= 0: return
-    
-    # Render layers
+    # 1. Start with 1:1 unscaled text surfaces
     depth_surf   = _font_title.render(label, False, C_DEPTH)
     outline_surf = _font_title.render(label, False, C_OUTLINE)
-    title_surf   = _font_title.render(label, False, C_ACCENT)
+    title_surf   = _font_title.render(label, False, color_anim)
     
-    # Scale layers
-    depth_surf   = pygame.transform.scale(depth_surf,   (sw, sh))
-    outline_surf = pygame.transform.scale(outline_surf, (sw, sh))
-    title_surf   = pygame.transform.scale(title_surf,   (sw, sh))
+    # 2. Create a unified composite surface to hold the text + shadow + outline
+    # We add enough padding to contain the offsets
+    comp_w = title_surf.get_width() + (OUTLINE * 2) + DEPTH
+    comp_h = title_surf.get_height() + (OUTLINE * 2) + DEPTH
+    comp_surf = pygame.Surface((comp_w, comp_h), pygame.SRCALPHA)
     
-    # Apply alpha
-    depth_surf.set_alpha(alpha)
-    outline_surf.set_alpha(alpha)
-    title_surf.set_alpha(alpha)
+    tx, ty = OUTLINE, OUTLINE
     
-    # Center rect
-    rect = title_surf.get_rect(center=(cx, cy))
-    
-    # Blit layers
-    for d in range(int(DEPTH * scale), 0, -1):
-        screen.blit(depth_surf, (rect.x + d, rect.y + d))
+    # Draw Depth (shadow)
+    for d in range(DEPTH, 0, -1):
+        comp_surf.blit(depth_surf, (tx + d, ty + d))
         
+    # Draw Outline
     for ox in range(-OUTLINE, OUTLINE + 1):
         for oy in range(-OUTLINE, OUTLINE + 1):
             if ox == 0 and oy == 0: continue
-            screen.blit(outline_surf, (rect.x + ox, rect.y + oy))
+            comp_surf.blit(outline_surf, (tx + ox, ty + oy))
             
-    screen.blit(title_surf, rect)
+    # Draw Main Text
+    comp_surf.blit(title_surf, (tx, ty))
     
-    # Or just "ROUND CLEAR" 
+    # 3. Scale the unified graphic
+    sw = int(comp_w * scale)
+    sh = int(comp_h * scale)
+    if sw <= 0 or sh <= 0: return
+    
+    comp_scaled = pygame.transform.scale(comp_surf, (sw, sh))
+    
+    # Apply alpha cleanly once (fixes alpha bleeding/layering overlap)
+    comp_scaled.set_alpha(alpha)
+    
+    # Blit centered at screen
+    rect = comp_scaled.get_rect(center=(cx, cy))
+    screen.blit(comp_scaled, rect)
+    
+    # Subtitle ("ROUND CLEAR / +50 OVERHEAL")
     sub_font = get_gothic_font(24)
     sub_label = get_ui_label("overheal_label")
     sub_surf = sub_font.render(sub_label, False, C_OVERHEAL)
@@ -2046,6 +2063,7 @@ def _draw_codex_back_button(
     margin_y: int,
 ) -> pygame.Rect:
     """Gothic text back control for mouse users; returns clickable rect."""
+    import settings as cfg
     sc_w = screen.get_width() / 1024.0
     font = get_gothic_font(int(22 * sc_w))
     pad_x = int(16 * sc_w)
@@ -2056,7 +2074,10 @@ def _draw_codex_back_button(
     hit = plain.get_rect(topleft=(margin_x, margin_y)).inflate(pad_x, pad_y)
 
     mx, my = pygame.mouse.get_pos()
-    is_hov = hit.collidepoint(mx, my)
+    is_hov = False
+    if cfg.input_method != 1:  # Not pure keyboard
+        is_hov = hit.collidepoint(mx, my)
+
     surf = active if is_hov else plain
     at = surf.get_rect(topleft=(margin_x, margin_y))
 
@@ -2165,8 +2186,8 @@ def draw_codex(
     # Fan Layout Parameters
     # We want the cards to fan out from the bottom center.
     fan_cx = w // 2
-    fan_cy = h + int(150 * sc_h) # center below screen
-    radius = int(500 * sc_h)
+    fan_cy = h + int(320 * sc_h) # pushed further down to edge
+    radius = int(520 * sc_h)
     arc_spread = math.radians(60) # total spread of the fan
     
     ranks = _RANKS
@@ -2231,32 +2252,32 @@ def draw_codex(
         start_y = fan_cy + radius * math.sin(angle)
         start_rot = -math.degrees(angle_offset)
         
-        # End (Center) position
-        end_x = cx
-        end_y = h // 2 - int(40 * sc_h)
+        # End (Left side) position
+        end_x = cx - int(200 * sc_w)
+        end_y = h // 2
         end_rot = 0
-        
+
         # Lerp
         t = _codex_anim_p
         # Smooth step for better feel
         t_smooth = t * t * (3 - 2 * t)
-        
+
         cur_x = start_x + (end_x - start_x) * t_smooth
         cur_y = start_y + (end_y - start_y) * t_smooth
         cur_rot = start_rot + (end_rot - start_rot) * t_smooth
-        
+
         # Scale lerp
-        large_w = int(138 * sc_w)
-        large_h = int(210 * sc_w)
+        large_w = int(200 * sc_w)
+        large_h = int(300 * sc_w)
         cur_w = int(card_w + (large_w - card_w) * t_smooth)
         cur_h = int(card_h + (large_h - card_h) * t_smooth)
-        
+
         src = get_card_surf(asuit, arank)
         if src:
             l_card = pygame.transform.scale(src, (cur_w, cur_h))
             rotated = pygame.transform.rotate(l_card, cur_rot)
             lc_rect = rotated.get_rect(center=(cur_x, cur_y))
-            
+
             # Dim background further (only if p > 0)
             if _codex_anim_p > 0:
                 dim = pygame.Surface((w, h), pygame.SRCALPHA)
@@ -2269,27 +2290,26 @@ def draw_codex(
             glow_s = pygame.Surface(glow_r.size, pygame.SRCALPHA)
             pygame.draw.rect(glow_s, (*C_ACCENT, glow_alpha), glow_s.get_rect(), border_radius=int(10 * sc_w))
             screen.blit(glow_s, glow_r)
-            
+
             screen.blit(rotated, lc_rect)
-            
+
             # Lore Overlay (Fades in when p > 0.5)
             if _codex_anim_p > 0.5:
                 lore_t = (_codex_anim_p - 0.5) / 0.5
                 lore_alpha = int(255 * lore_t)
-                
+
                 # Title
-                name_font = get_gothic_font(int(32 * sc_w))
+                name_font = get_gothic_font(int(36 * sc_w))
                 name_text = lore.get_title(asuit, arank)
                 name_surf = name_font.render(name_text, False, C_WHITE)
                 name_surf.set_alpha(lore_alpha)
-                # Position relative to final center, but maybe offset slightly if animating?
-                # Let's keep it fixed at the end position for stability
-                screen.blit(name_surf, name_surf.get_rect(centerx=cx, top=end_y + large_h // 2 + int(20 * sc_h)))
-                
+                # Position on the right side
+                screen.blit(name_surf, name_surf.get_rect(left=cx - int(20 * sc_w), top=end_y - large_h // 2))
+
                 # Lore text
                 l_text = lore.get_lore(asuit, arank)
-                lore_font = get_gothic_font(int(20 * sc_w))
-                wrap_width = int(600 * sc_w)
+                lore_font = get_gothic_font(int(22 * sc_w))
+                wrap_width = int(450 * sc_w)
                 words = l_text.split()
                 lines = []
                 cur_line = ""
@@ -2301,20 +2321,20 @@ def draw_codex(
                         lines.append(cur_line)
                         cur_line = word
                 lines.append(cur_line)
-                
-                ly = end_y + large_h // 2 + int(70 * sc_h)
+
+                ly = end_y - large_h // 2 + int(60 * sc_h)
                 for line in lines:
                     ls = lore_font.render(line, False, C_DIM)
                     ls.set_alpha(lore_alpha)
-                    screen.blit(ls, ls.get_rect(centerx=cx, top=ly))
-                    ly += int(25 * sc_h)
+                    screen.blit(ls, ls.get_rect(left=cx - int(20 * sc_w), top=ly))
+                    ly += int(28 * sc_h)
 
                 # Instruction to close
                 hint_font = get_gothic_font(int(18 * sc_w))
                 hint_text = "Press SPACE or ESC to close"
                 hint_surf = hint_font.render(hint_text, False, C_ACCENT)
                 hint_surf.set_alpha(lore_alpha)
-                screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
+                screen.blit(hint_surf, hint_surf.get_rect(left=cx - int(20 * sc_w), top=ly + int(30 * sc_h)))
 
     # Back to lineages (mouse + keyboard hint)
     if not revealed_card and _codex_anim_p == 0:

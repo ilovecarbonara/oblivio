@@ -26,7 +26,7 @@ from score import Score
 MISMATCH_DELAY_MS    = 1000.0  # ms to show mismatched cards before flipping back
 NEXT_ROUND_DELAY_MS  = 1200.0  # ms to wait after last match before starting the next round
 GRACE_MISM_COUNT     = 8    # mismatches allowed in Hellish mode before HP loss starts
-GAME_OVER_DELAY_MS   = 1000.0  # ms to wait after last mismatch flip back before showing GAME OVER screen
+GAME_OVER_DELAY_MS   = 2500.0  # ms to wait after last mismatch flip back before showing GAME OVER screen
 
 
 
@@ -446,11 +446,30 @@ class Game:
         # --- Pending game over delay ---
         if self._game_over_pending:
             self._game_over_delay -= dt_ms
+            
+            revealed_card = None
+            # Staggered card reveal effect for missed cards
+            unflipped = [c for c in self.cards if c.state == CardState.FACE_DOWN]
+            if unflipped:
+                if not hasattr(self, "_reveal_trickle_timer"):
+                    self._reveal_trickle_timer = 0.0
+                
+                self._reveal_trickle_timer -= dt_ms
+                if self._reveal_trickle_timer <= 0:
+                    import random
+                    c = random.choice(unflipped)
+                    c.flip() # Reveal the missed card
+                    revealed_card = c
+                    # Calculate how fast to flip based on remaining time and cards
+                    reveal_interval = max(30.0, (self._game_over_delay - 800.0) / max(len(unflipped), 1))
+                    self._reveal_trickle_timer = reveal_interval
+
             if self._game_over_delay <= 0:
                 self._game_over_pending = False
                 print(f"[GAME OVER] HP depleted — final score: {self.score.total}")
                 self.game_over()
-            return None
+            
+            return [revealed_card] if revealed_card else None
 
         if not self.lock_input:
             return None
