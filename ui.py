@@ -1692,9 +1692,7 @@ def draw_result_screen(screen: pygame.Surface, is_win: bool, score: int, round_n
     global _result_rects, _result_anim_timer
     _result_rects.clear()
 
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)
+    _draw_themed_background(screen, veil_alpha=155, frame=frame)
 
     # ── Animation Timings ────────────────────────────────────────────────
     t = _result_anim_timer
@@ -1958,9 +1956,9 @@ def draw_powerup_select(screen: pygame.Surface, selected: int, frame: int) -> No
     global _powerup_rects
     _powerup_rects.clear()
 
-    c = get_canvas()
-    draw_creepy_void(c, frame)
-    blit_canvas_to_screen(screen)
+    import backgrounds
+    backgrounds.set_active(backgrounds.BackgroundId.HELLISH)
+    _draw_themed_background(screen, veil_alpha=155, frame=frame // 4)
 
     if _font_title is None or _font_lg is None or _font_sm is None:
         return
@@ -2042,6 +2040,8 @@ def get_options_rect(row: int) -> pygame.Rect | None:
 _codex_rects: list[pygame.Rect] = []
 _codex_back_menu_rect: pygame.Rect | None = None
 _codex_back_lineage_rect: pygame.Rect | None = None
+_codex_lineage_prev_rect: pygame.Rect | None = None
+_codex_lineage_next_rect: pygame.Rect | None = None
 
 _codex_anim_p: float = 0.0 # 0.0 = fan, 1.0 = center
 _codex_anim_card: tuple[str, str] | None = None
@@ -2049,11 +2049,81 @@ _codex_anim_idx: int = -1
 _CODEX_ANIM_MS = 350.0 # speed of transition
 _codex_suit_hovers: list[float] = [0.0, 0.0, 0.0, 0.0]
 _codex_fan_hovers: list[float] = [0.0] * 13
+_codex_desc_scroll: int = 0   # line-steps the lineage description is scrolled down
+_codex_carousel_offset: float = 0.0   # animated rotation offset (radians), decays toward 0
+_codex_carousel_prev_suit: int = 0    # previous suit_idx for change detection
+
+# Scrollbar state (populated each frame by _draw_codex_suit_select)
+_codex_scroll_up_rect:    pygame.Rect | None = None
+_codex_scroll_dn_rect:    pygame.Rect | None = None
+_codex_scroll_thumb_rect: pygame.Rect | None = None
+_codex_scroll_track_rect: pygame.Rect | None = None
+_codex_scroll_max_steps:  int = 0   # max reachable scroll step, set during draw
+_codex_scroll_thumb_track_top: int = 0  # track top-y for drag math
+_codex_scroll_thumb_track_h:   int = 1  # track height for drag math
+_codex_scroll_dragging_active: bool = False  # synced from main for thumb visual state
+_codex_scroll_held_btn: str | None = None    # 'up'/'down' while button is held
 
 def _clear_codex_back_rects() -> None:
     global _codex_back_menu_rect, _codex_back_lineage_rect
     _codex_back_menu_rect = None
     _codex_back_lineage_rect = None
+
+
+def _clear_codex_lineage_nav_rects() -> None:
+    global _codex_lineage_prev_rect, _codex_lineage_next_rect
+    _codex_lineage_prev_rect = None
+    _codex_lineage_next_rect = None
+
+
+def reset_codex_desc_scroll() -> None:
+    """Reset the lineage description scroll to the top."""
+    global _codex_desc_scroll
+    _codex_desc_scroll = 0
+
+
+def scroll_codex_desc(direction: int) -> None:
+    """Scroll the lineage description by one line step. direction: +1=down, -1=up."""
+    global _codex_desc_scroll
+    _codex_desc_scroll = max(0, _codex_desc_scroll + direction)
+
+
+def get_hovered_codex_scroll(mx: int, my: int) -> str | None:
+    """Return which scrollbar element is hovered: 'up', 'down', 'thumb', or None."""
+    if _codex_scroll_up_rect and _codex_scroll_up_rect.collidepoint(mx, my):
+        return "up"
+    if _codex_scroll_dn_rect and _codex_scroll_dn_rect.collidepoint(mx, my):
+        return "down"
+    if _codex_scroll_thumb_rect and _codex_scroll_thumb_rect.collidepoint(mx, my):
+        return "thumb"
+    return None
+
+
+def get_codex_desc_scroll() -> int:
+    """Return the current scroll step count (for drag anchoring)."""
+    return _codex_desc_scroll
+
+
+def set_codex_desc_scroll_from_drag(my: int, drag_start_y: int, drag_start_step: int) -> None:
+    """Recompute scroll position from a thumb drag gesture."""
+    global _codex_desc_scroll, _codex_scroll_max_steps, _codex_scroll_thumb_track_h
+    if _codex_scroll_thumb_track_h <= 0 or _codex_scroll_max_steps <= 0:
+        return
+    dy = my - drag_start_y
+    step_delta = round(dy * _codex_scroll_max_steps / _codex_scroll_thumb_track_h)
+    _codex_desc_scroll = max(0, min(_codex_scroll_max_steps, drag_start_step + step_delta))
+
+
+def set_codex_scroll_dragging(val: bool) -> None:
+    """Tell the scrollbar renderer whether the thumb is actively being dragged."""
+    global _codex_scroll_dragging_active
+    _codex_scroll_dragging_active = val
+
+
+def set_codex_scroll_held_btn(btn: str | None) -> None:
+    """Tell the scrollbar renderer which button ('up'/'down') is held, or None."""
+    global _codex_scroll_held_btn
+    _codex_scroll_held_btn = btn
 
 
 def _draw_codex_back_button(
@@ -2062,31 +2132,73 @@ def _draw_codex_back_button(
     margin_x: int,
     margin_y: int,
 ) -> pygame.Rect:
-    """Gothic text back control for mouse users; returns clickable rect."""
+    """
+    Compact labeled back button for mouse / keyboard+mouse users.
+    Hidden entirely in keyboard-only mode (ESC still handles navigation).
+    Returns the clickable rect (zero-size if hidden).
+    """
     import settings as cfg
-    sc_w = screen.get_width() / 1024.0
-    font = get_gothic_font(int(22 * sc_w))
-    pad_x = int(16 * sc_w)
-    pad_y = int(10 * sc_w)
 
-    plain = font.render(label, False, C_DIM)
-    active = font.render(f"> {label}", False, C_WHITE)
-    hit = plain.get_rect(topleft=(margin_x, margin_y)).inflate(pad_x, pad_y)
+    # Keyboard-only: don't render — ESC handles back navigation
+    if cfg.input_method == 1:
+        return pygame.Rect(0, 0, 0, 0)
+
+    sc_w = screen.get_width() / 1024.0
+    sc_h = screen.get_height() / 768.0
+    font = get_gothic_font(int(22 * sc_w))
+    pad_x = int(14 * sc_w)
+
+    display_label = "<"
+    surf_normal = font.render(display_label, False, C_ACCENT)
+    surf_hover = font.render(display_label, False, C_WHITE)
+
+    btn_h = int(34 * sc_h)
+    btn_w = int(42 * sc_w)
+    hit = pygame.Rect(margin_x, margin_y, btn_w, btn_h)
+
+    mx, my    = pygame.mouse.get_pos()
+    is_hov    = hit.collidepoint(mx, my)
+
+    surf      = surf_hover if is_hov else surf_normal
+    text_rect = surf.get_rect(center=hit.center)
+
+    bg_color     = (25, 2, 14)    if is_hov else (12, 4, 18)
+    border_color = C_ACCENT       if is_hov else C_ACCENT_DK
+    pygame.draw.rect(screen, bg_color,     hit, border_radius=int(4 * sc_w))
+    pygame.draw.rect(screen, border_color, hit, max(1, int(2 * sc_w)), border_radius=int(4 * sc_w))
+
+    screen.blit(surf, text_rect)
+    return hit
+
+
+def _draw_codex_title_back_button(
+    screen: pygame.Surface,
+    sc_w: float,
+    sc_h: float,
+) -> pygame.Rect:
+    """Compact Codex back button fixed at the top-left corner."""
+    import settings as cfg
+
+    if cfg.input_method == 1:
+        return pygame.Rect(0, 0, 0, 0)
+
+    btn_w = int(42 * sc_w)
+    btn_h = int(34 * sc_h)
+
+    hit = pygame.Rect(int(24 * sc_w), int(24 * sc_h), btn_w, btn_h)
 
     mx, my = pygame.mouse.get_pos()
-    is_hov = False
-    if cfg.input_method != 1:  # Not pure keyboard
-        is_hov = hit.collidepoint(mx, my)
+    is_hov = hit.collidepoint(mx, my)
 
-    surf = active if is_hov else plain
-    at = surf.get_rect(topleft=(margin_x, margin_y))
+    bg_color = (25, 2, 14) if is_hov else (12, 4, 18)
+    border_color = C_ACCENT if is_hov else C_ACCENT_DK
+    label_color = C_WHITE if is_hov else C_ACCENT
+    pygame.draw.rect(screen, bg_color, hit, border_radius=int(4 * sc_w))
+    pygame.draw.rect(screen, border_color, hit, max(1, int(2 * sc_w)), border_radius=int(4 * sc_w))
 
-    if is_hov:
-        box = at.inflate(pad_x, pad_y)
-        pygame.draw.rect(screen, (25, 2, 14), box)
-        pygame.draw.rect(screen, C_ACCENT, box, max(1, int(2 * sc_w)))
-
-    screen.blit(surf, at)
+    font = get_gothic_font(int(22 * sc_w))
+    label_s = font.render("<", False, label_color)
+    screen.blit(label_s, label_s.get_rect(center=hit.center))
     return hit
 
 
@@ -2099,9 +2211,19 @@ def get_hovered_codex_back(mx: int, my: int) -> str | None:
     return None
 
 
+def get_hovered_codex_lineage_nav(mx: int, my: int) -> str | None:
+    """'prev' or 'next' when a lineage cycle button is hovered."""
+    if _codex_lineage_prev_rect and _codex_lineage_prev_rect.collidepoint(mx, my):
+        return "prev"
+    if _codex_lineage_next_rect and _codex_lineage_next_rect.collidepoint(mx, my):
+        return "next"
+    return None
+
+
 def update_codex_transitions(dt_ms: float, revealed_card: tuple[str, str] | None, selected_idx: int, view_mode: int = 0, suit_idx: int = 0) -> None:
     """Drive the codex animation progress based on whether a card is revealed."""
     global _codex_anim_p, _codex_anim_card, _codex_anim_idx, _codex_suit_hovers, _codex_fan_hovers
+    global _codex_carousel_offset, _codex_carousel_prev_suit
     
     if revealed_card:
         if _codex_anim_card != revealed_card:
@@ -2132,6 +2254,25 @@ def update_codex_transitions(dt_ms: float, revealed_card: tuple[str, str] | None
         else:
             _codex_fan_hovers[i] = max(target, _codex_fan_hovers[i] - dt_ms / 100.0)
 
+    # Carousel animation for suit select view
+    if view_mode == 0 and suit_idx != _codex_carousel_prev_suit:
+        diff = (suit_idx - _codex_carousel_prev_suit + 4) % 4
+        # diff=1 → RIGHT (next suit), diff=3 → LEFT (prev suit), diff=2 → jump
+        if diff == 3:
+            signed = -1
+        else:
+            signed = 1
+        _codex_carousel_offset -= signed * (math.pi / 2)
+        _codex_carousel_prev_suit = suit_idx
+
+    # Decay carousel offset toward 0 at constant speed (~280 ms per step)
+    if _codex_carousel_offset != 0.0:
+        speed = dt_ms / 280.0 * (math.pi / 2)
+        if abs(_codex_carousel_offset) <= speed:
+            _codex_carousel_offset = 0.0
+        else:
+            _codex_carousel_offset -= math.copysign(speed, _codex_carousel_offset)
+
 def draw_codex(
     screen: pygame.Surface,
     view_mode: int, # 0=Decks, 1=Fan
@@ -2148,6 +2289,7 @@ def draw_codex(
     _codex_rects.clear()
     _suit_rects.clear()
     _clear_codex_back_rects()
+    _clear_codex_lineage_nav_rects()
     
     _draw_ui_background(screen, frame=frame // 4)
     
@@ -2162,26 +2304,42 @@ def draw_codex(
     sc_w = w / 1024.0
     sc_h = h / 768.0
     
-    # Title
-    title_font = get_gothic_font(int(48 * sc_w))
-    title_text = get_ui_label("codex_title")
-    title_surf = title_font.render(title_text, False, C_WHITE)
-    shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
-    title_rect = title_surf.get_rect(centerx=cx, centery=int(50 * sc_h))
-    screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_w)))
-    screen.blit(title_surf, title_rect)
-    
-    # Suit Label (instead of selector)
     suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
     suit_name = suits[suit_idx]
-    suit_font = get_gothic_font(int(28 * sc_w))
-    s_surf = suit_font.render(suit_name.upper(), False, C_WHITE)
-    s_rect = s_surf.get_rect(centerx=cx, centery=title_rect.bottom + int(40 * sc_h))
-    screen.blit(s_surf, s_rect)
-    
-    # Static accent line below suit name
-    line_y = s_rect.bottom + int(5 * sc_h)
-    pygame.draw.line(screen, C_ACCENT, (s_rect.left - 20, line_y), (s_rect.right + 20, line_y), max(1, int(2 * sc_w)))
+
+    # Centered lineage title
+    title_text = suit_name.upper()
+    title_size = int(74 * sc_w)
+    title_font = get_gothic_font(title_size)
+    max_title_w = int(w * 0.78)
+    while title_font.size(title_text)[0] > max_title_w and title_size > int(42 * sc_w):
+        title_size -= 2
+        title_font = get_gothic_font(title_size)
+
+    title_surf = title_font.render(title_text, False, C_WHITE)
+    shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
+    title_rect = title_surf.get_rect(center=(cx, int(h * 0.22)))
+    screen.blit(shadow_surf, (title_rect.x + int(4 * sc_w), title_rect.y + int(4 * sc_h)))
+    screen.blit(title_surf, title_rect)
+
+    line_y = title_rect.bottom + int(10 * sc_h)
+    pygame.draw.line(
+        screen,
+        C_ACCENT,
+        (title_rect.left - int(28 * sc_w), line_y),
+        (title_rect.right + int(28 * sc_w), line_y),
+        max(1, int(2 * sc_w)),
+    )
+
+    # ── Back to Lineage button (top-left corner; hidden in keyboard-only mode) ──
+    global _codex_back_lineage_rect
+    if not revealed_card:
+        _codex_back_lineage_rect = _draw_codex_back_button(
+            screen,
+            get_ui_label("codex_back_lineage"),
+            int(24 * sc_w),
+            int(24 * sc_h),
+        )
 
     # Fan Layout Parameters
     # We want the cards to fan out from the bottom center.
@@ -2229,13 +2387,6 @@ def draw_codex(
             scaled = pygame.transform.scale(src, (card_w, card_h))
             rotated = pygame.transform.rotate(scaled, rot_deg)
             
-            # Darken if any card is revealed/animating
-            # We use _codex_anim_p to dim the fan
-            if (revealed_card or _codex_anim_p > 0):
-                dark = pygame.Surface(rotated.get_size(), pygame.SRCALPHA)
-                dark.fill((0, 0, 0, int(150 * _codex_anim_p)))
-                rotated.blit(dark, (0, 0))
-                
             r_rect = rotated.get_rect(center=(px, py))
             _codex_rects.append(r_rect)
             
@@ -2336,98 +2487,274 @@ def draw_codex(
                 hint_surf.set_alpha(lore_alpha)
                 screen.blit(hint_surf, hint_surf.get_rect(left=cx - int(100 * sc_w), top=ly + int(30 * sc_h)))
 
-    # Back to lineages (mouse + keyboard hint)
-    if not revealed_card and _codex_anim_p == 0:
-        global _codex_back_lineage_rect
-        margin = int(24 * sc_w)
-        _codex_back_lineage_rect = _draw_codex_back_button(
-            screen, get_ui_label("codex_back_lineage"), margin, margin,
-        )
-        hint_font = get_gothic_font(int(16 * sc_w))
-        hint_text = "Press ESC to return to lineages"
-        hint_surf = hint_font.render(hint_text, False, C_DIM)
-        screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(20 * sc_h)))
-
-
 def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: int) -> None:
-    """Draw 4 stacks of cards, one for each suit."""
-    global _codex_rects, _suit_rects
+    """Draw 4 cards in a vertical column on the left; lineage name + description on the right."""
+    global _codex_rects, _suit_rects, _codex_lineage_prev_rect, _codex_lineage_next_rect
     _codex_rects.clear()
     _suit_rects.clear()
+    _clear_codex_lineage_nav_rects()
 
     w, h = screen.get_size()
-    cx = w // 2
     sc_w = w / 1024.0
     sc_h = h / 768.0
 
-    # Title
-    title_font = get_gothic_font(int(48 * sc_w))
-    title_text = get_ui_label("codex_title")
-    title_surf = title_font.render(title_text, False, C_WHITE)
-    title_rect = title_surf.get_rect(centerx=cx, centery=int(100 * sc_h))
+    suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
+
+    # ── Back button (top-left corner) ────────────────────────────────────────
+    global _codex_back_menu_rect
+    _codex_back_menu_rect = _draw_codex_title_back_button(screen, sc_w, sc_h)
+
+    # ── Title (below back button, aligned with carousel) ─────────────────────
+    col_x_title = int(160 * sc_w)
+    btn_bottom  = int(24 * sc_h) + int(34 * sc_h)
+    title_font  = get_gothic_font(int(48 * sc_w))
+    title_text  = get_ui_label("codex_title")
+    title_surf  = title_font.render(title_text, False, C_WHITE)
+    shadow_surf = title_font.render(title_text, False, C_ACCENT_DK)
+    title_rect  = title_surf.get_rect(centerx=col_x_title, top=btn_bottom + int(10 * sc_h))
+    screen.blit(shadow_surf, (title_rect.x + int(3 * sc_w), title_rect.y + int(3 * sc_h)))
     screen.blit(title_surf, title_rect)
 
-    # Decks
-    suits = ["Sundered", "Hollow", "Arcanum", "Grafted"]
-    deck_w = int(120 * sc_w)
-    deck_h = int(180 * sc_w)
-    spacing = int(220 * sc_w)
-    start_x = cx - (spacing * 1.5)
+    # ── Left column: horizontal circular carousel ─────────────────────────────
+    card_w_base = int(90 * sc_w)
+    card_h_base = int(135 * sc_w)
+    col_x    = int(160 * sc_w)   # center X of the carousel
+    center_y = int(h * 0.50)     # vertical center of the carousel
+    radius_x = int(78 * sc_w)    # horizontal radius of the ellipse
 
-    for i, suit in enumerate(suits):
-        is_sel = (i == selected_suit)
-        dx = start_x + i * spacing
-        dy = h // 2
-        
-        rect = pygame.Rect(0, 0, deck_w, deck_h)
-        rect.center = (dx, dy)
-        _suit_rects.append(rect) # for click detection
-        
-        # Hover lift (Smooth)
-        lift_p = _codex_suit_hovers[i]
-        dy -= int(20 * sc_h * lift_p)
-            
-        # Draw stack (3 cards)
-        for offset in range(3, 0, -1):
-            ox = dx + offset * int(3 * sc_w)
-            oy = dy + offset * int(3 * sc_w)
-            
-            back = get_back_surf()
-            if back:
-                b_scaled = pygame.transform.scale(back, (deck_w, deck_h))
-                screen.blit(b_scaled, b_scaled.get_rect(center=(ox, oy)))
-        
-        # Top card (Ace)
-        ace_surf = get_card_surf(suit, "A")
-        if ace_surf:
-            a_scaled = pygame.transform.scale(ace_surf, (deck_w, deck_h))
-            screen.blit(a_scaled, a_scaled.get_rect(center=(dx, dy)))
-            
-        # Highlight border removed as requested (redundant with hover lift)
-            
-        # Suit Label
-        label_font = get_gothic_font(int(24 * sc_w))
-        # Label color also transitions
-        t_c = (
-            int(C_DIM[0] + (C_WHITE[0] - C_DIM[0]) * lift_p),
-            int(C_DIM[1] + (C_WHITE[1] - C_DIM[1]) * lift_p),
-            int(C_DIM[2] + (C_WHITE[2] - C_DIM[2]) * lift_p)
-        )
-        l_surf = label_font.render(suit.upper(), False, t_c)
-        screen.blit(l_surf, l_surf.get_rect(centerx=dx, top=dy + deck_h // 2 + int(30 * sc_h)))
+    # Pre-allocate suit_rects slots so index i always maps to suit i
+    for _ in range(4):
+        _suit_rects.append(pygame.Rect(0, 0, 0, 0))
 
-    # Hint
-    hint_font = get_gothic_font(int(18 * sc_w))
-    hint_text = "Select a suit to view registry"
-    hint_surf = hint_font.render(hint_text, False, C_ACCENT)
-    screen.blit(hint_surf, hint_surf.get_rect(centerx=cx, bottom=h - int(40 * sc_h)))
-
-    global _codex_back_menu_rect
-    margin = int(24 * sc_w)
-    _codex_back_menu_rect = _draw_codex_back_button(
-        screen, get_ui_label("codex_back_menu"), margin, int(24 * sc_h),
+    # Sort suits back-to-front so the selected card renders on top
+    card_order = sorted(
+        range(4),
+        key=lambda i: (1.0 + math.cos(((i - selected_suit) % 4) * (math.pi / 2) - _codex_carousel_offset)) / 2.0
     )
 
+    for i in card_order:
+        suit = suits[i]
+        nat_angle = ((i - selected_suit) % 4) * (math.pi / 2)
+        disp_angle = nat_angle - _codex_carousel_offset
+
+        # depth: 1.0 = front (selected), 0.0 = back (opposite, not drawn)
+        depth = (1.0 + math.cos(disp_angle)) / 2.0
+        if depth < 0.04:
+            continue
+
+        cw = max(1, int(card_w_base * (0.55 + 0.45 * depth)))
+        ch = max(1, int(card_h_base * (0.55 + 0.45 * depth)))
+        dim_alpha = int(155 * (1.0 - depth))
+
+        # Horizontal displacement; all cards share the same center_y
+        draw_cx = int(col_x + radius_x * math.sin(disp_angle))
+        draw_cy = center_y
+
+        # Update hit rect at visual position for mouse interaction
+        hit_rect = pygame.Rect(0, 0, cw, ch)
+        hit_rect.center = (draw_cx, draw_cy)
+        _suit_rects[i] = hit_rect
+
+        # Accent glow behind the front card
+        if depth > 0.85:
+            glow_r = pygame.Rect(0, 0, cw + int(16 * sc_w), ch + int(16 * sc_h))
+            glow_r.center = (draw_cx, draw_cy)
+            glow_s = pygame.Surface(glow_r.size, pygame.SRCALPHA)
+            pygame.draw.rect(
+                glow_s, (*C_ACCENT, int(70 * depth)),
+                glow_s.get_rect(), border_radius=int(6 * sc_w)
+            )
+            screen.blit(glow_s, glow_r)
+
+        # Back-card stack shadow (offset downward for depth)
+        for off in range(2, 0, -1):
+            ox = draw_cx + off * int(2 * sc_w)
+            oy = draw_cy + off * int(2 * sc_h)
+            back = get_back_surf()
+            if back:
+                b_scaled = pygame.transform.scale(back, (cw, ch))
+                if dim_alpha > 0:
+                    dim_s = pygame.Surface(b_scaled.get_size(), pygame.SRCALPHA)
+                    dim_s.fill((0, 0, 0, dim_alpha))
+                    b_scaled.blit(dim_s, (0, 0))
+                screen.blit(b_scaled, b_scaled.get_rect(center=(ox, oy)))
+
+        # Top card (Ace of the suit)
+        ace_surf = get_card_surf(suit, "A")
+        if ace_surf:
+            a_scaled = pygame.transform.scale(ace_surf, (cw, ch))
+            if dim_alpha > 0:
+                dim_s = pygame.Surface(a_scaled.get_size(), pygame.SRCALPHA)
+                dim_s.fill((0, 0, 0, dim_alpha))
+                a_scaled.blit(dim_s, (0, 0))
+            screen.blit(a_scaled, a_scaled.get_rect(center=(draw_cx, draw_cy)))
+
+    # Navigation cycle buttons below the carousel
+    nav_font = get_gothic_font(int(18 * sc_w))
+    btn_w = int(54 * sc_w)
+    btn_h = int(30 * sc_h)
+    btn_gap = int(12 * sc_w)
+    btn_y = center_y + int(card_h_base * 0.5) + int(54 * sc_h)
+    mx, my = pygame.mouse.get_pos()
+
+    _codex_lineage_prev_rect = pygame.Rect(0, 0, btn_w, btn_h)
+    _codex_lineage_next_rect = pygame.Rect(0, 0, btn_w, btn_h)
+    _codex_lineage_prev_rect.center = (col_x - btn_w // 2 - btn_gap // 2, btn_y)
+    _codex_lineage_next_rect.center = (col_x + btn_w // 2 + btn_gap // 2, btn_y)
+
+    for rect, label in ((_codex_lineage_prev_rect, "\u25c4"), (_codex_lineage_next_rect, "\u25ba")):
+        is_hov = rect.collidepoint(mx, my)
+        bg_color = (25, 2, 14) if is_hov else (12, 4, 18)
+        border_color = C_ACCENT if is_hov else C_ACCENT_DK
+        label_color = C_WHITE if is_hov else C_ACCENT
+        pygame.draw.rect(screen, bg_color, rect, border_radius=int(4 * sc_w))
+        pygame.draw.rect(screen, border_color, rect, max(1, int(2 * sc_w)), border_radius=int(4 * sc_w))
+        label_s = nav_font.render(label, False, label_color)
+        screen.blit(label_s, label_s.get_rect(center=rect.center))
+
+    # ── Subtle vertical divider ───────────────────────────────────────────────
+    div_x = int(310 * sc_w)
+    pygame.draw.line(
+        screen, C_ACCENT_DK,
+        (div_x, int(80 * sc_h)), (div_x, h - int(80 * sc_h)),
+        max(1, int(1 * sc_w))
+    )
+
+    # ── Right panel: lineage name + description ───────────────────────────────
+    right_x = int(340 * sc_w)
+    right_w  = w - right_x - int(40 * sc_w)
+
+    # Scrollbar dimensions (occupies the rightmost portion of the panel margin)
+    _sb_w   = max(6, int(9 * sc_w))                      # slim visual strip
+    _sb_gap = int(12 * sc_w)                             # gap between text column and bar
+    text_w  = right_w - _sb_w - _sb_gap - int(10 * sc_w) # text column width
+    _sb_x   = right_x + text_w + _sb_gap                 # scrollbar left edge
+
+    suit_name = suits[selected_suit]
+
+    # Lineage name
+    name_font   = get_gothic_font(int(42 * sc_w))
+    name_surf   = name_font.render(suit_name.upper(), False, C_WHITE)
+    name_shadow = name_font.render(suit_name.upper(), False, C_ACCENT_DK)
+    name_rect   = name_surf.get_rect(left=right_x, top=int(120 * sc_h))
+    screen.blit(name_shadow, (name_rect.x + int(2 * sc_w), name_rect.y + int(3 * sc_h)))
+    screen.blit(name_surf, name_rect)
+
+    # Accent line under name (spans full right_w for visual balance)
+    line_y = name_rect.bottom + int(14 * sc_h)
+    pygame.draw.line(
+        screen, C_ACCENT,
+        (right_x, line_y), (right_x + right_w, line_y),
+        max(1, int(2 * sc_w))
+    )
+
+    # ── Lore description with scroll ─────────────────────────────────────────
+    lore_lines = lore.get_lineage_lore(suit_name)  # list[str]
+    desc_font  = get_gothic_font(int(18 * sc_w))
+    line_h  = int(32 * sc_h)
+    blank_h = int(20 * sc_h)
+
+    # Build flat render list: (text, is_quote) after word-wrapping
+    rendered: list[tuple[str, bool]] = []
+    for raw in lore_lines:
+        if raw == "":
+            rendered.append(("", False))
+        else:
+            is_quote = raw.startswith('"') and raw.endswith('"')
+            words = raw.split()
+            cur = ""
+            for word in words:
+                test = cur + " " + word if cur else word
+                if desc_font.size(test)[0] <= text_w:
+                    cur = test
+                else:
+                    rendered.append((cur, is_quote))
+                    cur = word
+            if cur:
+                rendered.append((cur, is_quote))
+
+    total_h  = sum(blank_h if t == "" else line_h for t, _ in rendered)
+    desc_top = line_y + int(20 * sc_h)
+    avail_h  = h - desc_top - int(54 * sc_h)   # leave room for nav hint
+
+    # Clamp + convert scroll steps → pixel offset
+    max_scroll_px  = max(0, total_h - avail_h)
+    scroll_px      = min(_codex_desc_scroll * line_h, max_scroll_px)
+    can_scroll_up  = scroll_px > 0
+    can_scroll_dn  = scroll_px < max_scroll_px
+
+    # Clip and draw text (clipped to text column width)
+    prev_clip = screen.get_clip()
+    screen.set_clip(pygame.Rect(right_x, desc_top, text_w, avail_h))
+    ly = desc_top - scroll_px
+    for text, is_quote in rendered:
+        lh = blank_h if text == "" else line_h
+        if text and (ly + lh > desc_top) and (ly < desc_top + avail_h):
+            color = C_ACCENT if is_quote else C_DIM
+            ls = desc_font.render(text, False, color)
+            screen.blit(ls, (right_x, ly))
+        ly += lh
+    screen.set_clip(prev_clip)
+
+    # ── Scrollbar ─────────────────────────────────────────────────────────────
+    global _codex_scroll_up_rect, _codex_scroll_dn_rect
+    global _codex_scroll_thumb_rect, _codex_scroll_track_rect
+    global _codex_scroll_max_steps, _codex_scroll_thumb_track_top, _codex_scroll_thumb_track_h
+
+    SB_RAD    = max(2, int(3 * sc_w))
+    SB_BTN_H  = int(18 * sc_h)
+    sb_track_top = desc_top + SB_BTN_H + int(6 * sc_h)
+    sb_track_bot = desc_top + avail_h - SB_BTN_H - int(6 * sc_h)
+    sb_track_h   = max(1, sb_track_bot - sb_track_top)
+    _codex_scroll_thumb_track_top = sb_track_top
+    _codex_scroll_thumb_track_h   = sb_track_h
+
+    mx_cur, my_cur = pygame.mouse.get_pos()
+    arrow_font = get_gothic_font(int(12 * sc_w))
+
+    if max_scroll_px > 0:
+        _codex_scroll_max_steps = max(1, -(-max_scroll_px // max(1, line_h)))
+
+        # ── Track ──
+        track_rect = pygame.Rect(_sb_x, sb_track_top, _sb_w, sb_track_h)
+        pygame.draw.rect(screen, (14, 6, 20), track_rect, border_radius=SB_RAD)
+        _codex_scroll_track_rect = track_rect
+
+        # ── Thumb ──
+        vis_frac    = min(1.0, avail_h / total_h) if total_h > 0 else 1.0
+        thumb_h     = max(int(24 * sc_h), int(sb_track_h * vis_frac))
+        thumb_offset = int((sb_track_h - thumb_h) * scroll_px / max_scroll_px)
+        thumb_rect  = pygame.Rect(_sb_x, sb_track_top + thumb_offset, _sb_w, thumb_h)
+        _codex_scroll_thumb_rect = thumb_rect
+
+        pygame.draw.rect(screen, (96, 55, 78), thumb_rect, border_radius=SB_RAD)
+
+        # ── Up / Down buttons ──
+        up_btn_rect = pygame.Rect(_sb_x, desc_top, _sb_w, SB_BTN_H)
+        dn_btn_rect = pygame.Rect(_sb_x, desc_top + avail_h - SB_BTN_H, _sb_w, SB_BTN_H)
+        for btn_rect, label, can_scroll, held_key in (
+            (up_btn_rect, "\u25b2", can_scroll_up, "up"),
+            (dn_btn_rect, "\u25bc", can_scroll_dn, "down"),
+        ):
+            if not can_scroll:
+                bg = (8, 4, 13)
+                lc = (42, 22, 34)
+            else:
+                bg = (13, 5, 18)
+                lc = (120, 78, 98)
+
+            pygame.draw.rect(screen, bg, btn_rect, border_radius=SB_RAD)
+            arr_s = arrow_font.render(label, False, lc)
+            screen.blit(arr_s, arr_s.get_rect(center=btn_rect.center))
+
+        _codex_scroll_up_rect = up_btn_rect
+        _codex_scroll_dn_rect = dn_btn_rect
+    else:
+        _codex_scroll_up_rect    = None
+        _codex_scroll_dn_rect    = None
+        _codex_scroll_thumb_rect = None
+        _codex_scroll_track_rect = None
+        _codex_scroll_max_steps  = 0
 
 def get_hovered_codex_item(mx: int, my: int) -> tuple[str, int] | None:
     """Returns ('suit', idx) or ('card', idx) or None."""

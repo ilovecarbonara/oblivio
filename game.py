@@ -26,7 +26,8 @@ from score import Score
 MISMATCH_DELAY_MS    = 1000.0  # ms to show mismatched cards before flipping back
 NEXT_ROUND_DELAY_MS  = 1200.0  # ms to wait after last match before starting the next round
 GRACE_MISM_COUNT     = 8    # mismatches allowed in Hellish mode before HP loss starts
-GAME_OVER_DELAY_MS   = 2500.0  # ms to wait after last mismatch flip back before showing GAME OVER screen
+GAME_OVER_DELAY_MS   = 1500.0  # ms to wait after all cards flip before showing GAME OVER screen
+SCORCHED_BURN_DAMAGE_PER_SECOND = 2.0  # HP drained while one Scorched card waits unmatched
 
 
 
@@ -114,13 +115,16 @@ class Game:
         self.matched_pairs      : int          = 0      # number of pairs found so far
         self._next_round_pending: bool         = False  # True when last pair matched, waiting for anim
         self._next_round_delay  : float        = 0.0    # countdown (ms) before next round starts
-        self._game_over_pending : bool         = False  # True when HP is 0, waiting for flip back anim
+        self._game_over_pending : bool         = False  # True when HP is 0, waiting for reveal anim
         self._game_over_delay   : float        = 0.0    # countdown (ms) before GAME_OVER transition
+        self._reveal_all_done   : bool         = False  # True once all cards have been flipped simultaneously
 
         # --- HP & scoring (Week 3) ---
         self.hp              : HPBar        = HPBar()
         self.score           : Score        = Score()
         self._turn_start_ticks: int         = 0      # pygame ticks when 1st card flipped
+        self._scorched_burning: bool        = False  # True while one Scorched card is waiting
+        self._burn_fraction  : float        = 0.0    # sub-HP burn accumulation
 
         # --- Power-Ups (Hard Mode) ---
         self.shield_charges  : int          = 0
@@ -160,9 +164,12 @@ class Game:
         self._next_round_delay   = 0.0
         self._game_over_pending  = False
         self._game_over_delay    = 0.0
+        self._reveal_all_done    = False
         self.hp                 = HPBar()
         self.score              = Score()
         self._turn_start_ticks  = 0
+        self._scorched_burning  = False
+        self._burn_fraction     = 0.0
 
         # Reset reward tracking
         self.successive_matches = 0
@@ -205,6 +212,8 @@ class Game:
         self._game_over_pending  = False
         self._game_over_delay    = 0.0
         self._turn_start_ticks   = 0
+        self._scorched_burning   = False
+        self._burn_fraction      = 0.0
 
         # Regeneration for clearing the previous round
         self.hp.heal(25)
@@ -246,6 +255,8 @@ class Game:
         self.hp                  = HPBar()
         self.score               = Score()
         self._turn_start_ticks   = 0
+        self._scorched_burning   = False
+        self._burn_fraction      = 0.0
         self.shield_charges      = 0
         self.lifesteal_active    = False
         self.has_extra_life      = False
@@ -344,7 +355,10 @@ class Game:
 
         if len(self.flipped_cards) < 2:
             self._turn_start_ticks = pygame.time.get_ticks()
+            self._start_scorched_burn()
             return "flip"
+
+        self._stop_scorched_burn()
 
         # --- Two cards revealed: evaluate ---
         a, b = self.flipped_cards
@@ -412,6 +426,44 @@ class Game:
         self.mismatch_timer = MISMATCH_DELAY_MS
         return "mismatch"
 
+    def _start_scorched_burn(self) -> None:
+        if self.difficulty == Difficulty.MEDIUM:
+            self._scorched_burning = True
+
+    def _stop_scorched_burn(self) -> None:
+        self._scorched_burning = False
+        self._burn_fraction = 0.0
+
+    def _tick_scorched_burn(self, dt_ms: float) -> None:
+        if self.difficulty != Difficulty.MEDIUM or not self._scorched_burning:
+            return
+
+        burn_amount = SCORCHED_BURN_DAMAGE_PER_SECOND * (dt_ms / 1000.0)
+        self._burn_fraction += burn_amount
+
+        whole_hp = int(self._burn_fraction)
+        if whole_hp <= 0:
+            return
+
+        self._burn_fraction -= whole_hp
+        self.hp.deduct(whole_hp)
+        print(f"[SCORCHED] Burn tick -{whole_hp} HP (Current: {self.hp.current_hp})")
+
+    def _start_game_over_if_depleted(self) -> None:
+        if not self.hp.is_depleted or self._game_over_pending:
+            return
+
+        if self.has_extra_life:
+            self.has_extra_life = False
+            self.hp.heal(30)
+            self._stop_scorched_burn()
+            print("[REVIVE] Extra Life consumed! HP restored to 30.")
+        else:
+            self._stop_scorched_burn()
+            print("[GAME OVER] HP depleted — waiting for reveal animation...")
+            self._game_over_pending = True
+            self._game_over_delay   = GAME_OVER_DELAY_MS
+
     def update(self, dt_ms: float) -> Optional[list[Card]]:
         """
         Per-frame update.  Manages the mismatch countdown timer and score decay.
@@ -431,6 +483,11 @@ class Game:
         if self.score.tick(dt_ms):
             print("[STREAK] Multiplier timed out — streak reset")
 
+        if self.state == GameState.PLAYING and not self._next_round_pending and not self._game_over_pending:
+            self._tick_scorched_burn(dt_ms)
+            if not self.lock_input:
+                self._start_game_over_if_depleted()
+
         # --- Pending next-round delay (let last flip animation play) ---
         if self._next_round_pending:
             self._next_round_delay -= dt_ms
@@ -446,30 +503,22 @@ class Game:
         # --- Pending game over delay ---
         if self._game_over_pending:
             self._game_over_delay -= dt_ms
-            
-            revealed_card = None
-            # Staggered card reveal effect for missed cards
-            unflipped = [c for c in self.cards if c.state == CardState.FACE_DOWN]
-            if unflipped:
-                if not hasattr(self, "_reveal_trickle_timer"):
-                    self._reveal_trickle_timer = 0.0
-                
-                self._reveal_trickle_timer -= dt_ms
-                if self._reveal_trickle_timer <= 0:
-                    import random
-                    c = random.choice(unflipped)
-                    c.flip() # Reveal the missed card
-                    revealed_card = c
-                    # Calculate how fast to flip based on remaining time and cards
-                    reveal_interval = max(30.0, (self._game_over_delay - 800.0) / max(len(unflipped), 1))
-                    self._reveal_trickle_timer = reveal_interval
+
+            # On the first frame: flip all remaining face-down cards simultaneously
+            if not self._reveal_all_done:
+                unflipped = [c for c in self.cards if c.state == CardState.FACE_DOWN]
+                for c in unflipped:
+                    c.flip()
+                self._reveal_all_done = True
+                return unflipped if unflipped else None
 
             if self._game_over_delay <= 0:
                 self._game_over_pending = False
+                self._reveal_all_done = False
                 print(f"[GAME OVER] HP depleted — final score: {self.score.total}")
                 self.game_over()
-            
-            return [revealed_card] if revealed_card else None
+
+            return None
 
         if not self.lock_input:
             return None
@@ -486,15 +535,7 @@ class Game:
         self.lock_input = False
 
         # --- Game-over check (Week 3) ---
-        if self.hp.is_depleted:
-            if self.has_extra_life:
-                self.has_extra_life = False
-                self.hp.heal(30)
-                print("[REVIVE] Extra Life consumed! HP restored to 30.")
-            else:
-                print("[GAME OVER] HP depleted — waiting for flip back animation...")
-                self._game_over_pending = True
-                self._game_over_delay   = GAME_OVER_DELAY_MS
+        self._start_game_over_if_depleted()
 
         return mismatched
 
