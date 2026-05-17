@@ -162,6 +162,13 @@ def main() -> None:
     codex_suit_idx   = 0       # 0-3 (Sundered, Hollow, Arcanum, Grafted)
     codex_view_mode  = 0       # 0=Deck Select, 1=Fan View
     codex_revealed_card: tuple[str, str] | None = None
+    _codex_scroll_dragging:   bool = False   # True while thumb is being dragged
+    _codex_scroll_drag_start_y:    int = 0   # mouse y when drag began
+    _codex_scroll_drag_start_step: int = 0   # scroll step value when drag began
+    _SCROLL_REPEAT_INITIAL: float = 400.0    # ms before hold-repeat begins
+    _SCROLL_REPEAT_RATE:    float = 70.0     # ms between repeated scroll steps
+    _scroll_btn_held: str | None = None      # 'up' or 'down' while button is held
+    _scroll_btn_held_timer: float = 0.0      # countdown to next repeat fire
     options_origin  = "menu"   # "menu" or "pause" — where we came from
     frame           = 0
     _next_round_wait = 0.0     # used for perfection popup delay
@@ -253,11 +260,16 @@ def main() -> None:
                     if idx is not None: powerup_selected = idx
                 
                 elif game.state == GameState.CODEX:
-                    res = ui.get_hovered_codex_item(mx, my)
-                    if res:
-                        type, idx = res
-                        if type == "card":
-                            codex_selected = idx
+                    if _codex_scroll_dragging and codex_view_mode == 0:
+                        ui.set_codex_desc_scroll_from_drag(
+                            my, _codex_scroll_drag_start_y, _codex_scroll_drag_start_step
+                        )
+                    else:
+                        res = ui.get_hovered_codex_item(mx, my)
+                        if res:
+                            type, idx = res
+                            if type == "card":
+                                codex_selected = idx
 
             elif event.type == pygame.KEYDOWN:
                 if cfg.input_method == 2 and event.key != pygame.K_ESCAPE:
@@ -709,11 +721,33 @@ def main() -> None:
                                 codex_suit_idx = (codex_suit_idx + 1) % 4
                                 ui.reset_codex_desc_scroll()
                             else:
-                                codex_item = ui.get_hovered_codex_item(mx, my)
-                                if codex_item is not None:
-                                    item_type, item_idx = codex_item
-                                    if item_type == "card" or item_idx == codex_suit_idx:
-                                        valid_click = True
+                                # Check scrollbar before falling through to card items
+                                scroll_hit = (
+                                    ui.get_hovered_codex_scroll(mx, my)
+                                    if codex_view_mode == 0 and not codex_revealed_card
+                                    else None
+                                )
+                                if scroll_hit == "up":
+                                    ui.scroll_codex_desc(-1)
+                                    _scroll_btn_held = "up"
+                                    _scroll_btn_held_timer = _SCROLL_REPEAT_INITIAL
+                                    ui.set_codex_scroll_held_btn("up")
+                                elif scroll_hit == "down":
+                                    ui.scroll_codex_desc(+1)
+                                    _scroll_btn_held = "down"
+                                    _scroll_btn_held_timer = _SCROLL_REPEAT_INITIAL
+                                    ui.set_codex_scroll_held_btn("down")
+                                elif scroll_hit == "thumb":
+                                    _codex_scroll_dragging    = True
+                                    _codex_scroll_drag_start_y    = my
+                                    _codex_scroll_drag_start_step = ui.get_codex_desc_scroll()
+                                    ui.set_codex_scroll_dragging(True)
+                                else:
+                                    codex_item = ui.get_hovered_codex_item(mx, my)
+                                    if codex_item is not None:
+                                        item_type, item_idx = codex_item
+                                        if item_type == "card" or item_idx == codex_suit_idx:
+                                            valid_click = True
                         
                     if valid_click:
                         pygame.event.post(pygame.event.Event(EVENT_SELECT))
@@ -750,6 +784,34 @@ def main() -> None:
                                         _options_adjust(idx, -1, options_data)
                                     else:
                                         _options_adjust(idx, +1, options_data)
+
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                _codex_scroll_dragging = False
+                ui.set_codex_scroll_dragging(False)
+                _scroll_btn_held = None
+                ui.set_codex_scroll_held_btn(None)
+
+            elif event.type == pygame.MOUSEWHEEL:
+                if (cfg.input_method != 1
+                        and game.state == GameState.CODEX
+                        and codex_view_mode == 0
+                        and not codex_revealed_card):
+                    # event.y: positive = scroll up (away from user) → move content down
+                    ui.scroll_codex_desc(-event.y)
+
+        # ---- Hold-to-scroll repeat ----------------------------------------
+        if (_scroll_btn_held
+                and game.state == GameState.CODEX
+                and codex_view_mode == 0
+                and not codex_revealed_card):
+            if pygame.mouse.get_pressed()[0]:
+                _scroll_btn_held_timer -= dt_ms
+                if _scroll_btn_held_timer <= 0:
+                    _scroll_btn_held_timer += _SCROLL_REPEAT_RATE
+                    ui.scroll_codex_desc(-1 if _scroll_btn_held == "up" else +1)
+            else:
+                _scroll_btn_held = None
+                ui.set_codex_scroll_held_btn(None)
 
         # -------------------------------------------------- game logic tick
         mismatched = game.update(dt_ms)

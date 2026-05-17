@@ -2055,6 +2055,17 @@ _codex_desc_scroll: int = 0   # line-steps the lineage description is scrolled d
 _codex_carousel_offset: float = 0.0   # animated rotation offset (radians), decays toward 0
 _codex_carousel_prev_suit: int = 0    # previous suit_idx for change detection
 
+# Scrollbar state (populated each frame by _draw_codex_suit_select)
+_codex_scroll_up_rect:    pygame.Rect | None = None
+_codex_scroll_dn_rect:    pygame.Rect | None = None
+_codex_scroll_thumb_rect: pygame.Rect | None = None
+_codex_scroll_track_rect: pygame.Rect | None = None
+_codex_scroll_max_steps:  int = 0   # max reachable scroll step, set during draw
+_codex_scroll_thumb_track_top: int = 0  # track top-y for drag math
+_codex_scroll_thumb_track_h:   int = 1  # track height for drag math
+_codex_scroll_dragging_active: bool = False  # synced from main for thumb visual state
+_codex_scroll_held_btn: str | None = None    # 'up'/'down' while button is held
+
 def _clear_codex_back_rects() -> None:
     global _codex_back_menu_rect, _codex_back_lineage_rect
     _codex_back_menu_rect = None
@@ -2077,6 +2088,44 @@ def scroll_codex_desc(direction: int) -> None:
     """Scroll the lineage description by one line step. direction: +1=down, -1=up."""
     global _codex_desc_scroll
     _codex_desc_scroll = max(0, _codex_desc_scroll + direction)
+
+
+def get_hovered_codex_scroll(mx: int, my: int) -> str | None:
+    """Return which scrollbar element is hovered: 'up', 'down', 'thumb', or None."""
+    if _codex_scroll_up_rect and _codex_scroll_up_rect.collidepoint(mx, my):
+        return "up"
+    if _codex_scroll_dn_rect and _codex_scroll_dn_rect.collidepoint(mx, my):
+        return "down"
+    if _codex_scroll_thumb_rect and _codex_scroll_thumb_rect.collidepoint(mx, my):
+        return "thumb"
+    return None
+
+
+def get_codex_desc_scroll() -> int:
+    """Return the current scroll step count (for drag anchoring)."""
+    return _codex_desc_scroll
+
+
+def set_codex_desc_scroll_from_drag(my: int, drag_start_y: int, drag_start_step: int) -> None:
+    """Recompute scroll position from a thumb drag gesture."""
+    global _codex_desc_scroll, _codex_scroll_max_steps, _codex_scroll_thumb_track_h
+    if _codex_scroll_thumb_track_h <= 0 or _codex_scroll_max_steps <= 0:
+        return
+    dy = my - drag_start_y
+    step_delta = round(dy * _codex_scroll_max_steps / _codex_scroll_thumb_track_h)
+    _codex_desc_scroll = max(0, min(_codex_scroll_max_steps, drag_start_step + step_delta))
+
+
+def set_codex_scroll_dragging(val: bool) -> None:
+    """Tell the scrollbar renderer whether the thumb is actively being dragged."""
+    global _codex_scroll_dragging_active
+    _codex_scroll_dragging_active = val
+
+
+def set_codex_scroll_held_btn(btn: str | None) -> None:
+    """Tell the scrollbar renderer which button ('up'/'down') is held, or None."""
+    global _codex_scroll_held_btn
+    _codex_scroll_held_btn = btn
 
 
 def _draw_codex_back_button(
@@ -2577,6 +2626,12 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
     right_x = int(340 * sc_w)
     right_w  = w - right_x - int(40 * sc_w)
 
+    # Scrollbar dimensions (occupies the rightmost portion of the panel margin)
+    _sb_w   = max(6, int(9 * sc_w))                      # slim visual strip
+    _sb_gap = int(12 * sc_w)                             # gap between text column and bar
+    text_w  = right_w - _sb_w - _sb_gap - int(10 * sc_w) # text column width
+    _sb_x   = right_x + text_w + _sb_gap                 # scrollbar left edge
+
     suit_name = suits[selected_suit]
 
     # Lineage name
@@ -2587,7 +2642,7 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
     screen.blit(name_shadow, (name_rect.x + int(2 * sc_w), name_rect.y + int(3 * sc_h)))
     screen.blit(name_surf, name_rect)
 
-    # Accent line under name
+    # Accent line under name (spans full right_w for visual balance)
     line_y = name_rect.bottom + int(14 * sc_h)
     pygame.draw.line(
         screen, C_ACCENT,
@@ -2612,7 +2667,7 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
             cur = ""
             for word in words:
                 test = cur + " " + word if cur else word
-                if desc_font.size(test)[0] <= right_w:
+                if desc_font.size(test)[0] <= text_w:
                     cur = test
                 else:
                     rendered.append((cur, is_quote))
@@ -2630,9 +2685,9 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
     can_scroll_up  = scroll_px > 0
     can_scroll_dn  = scroll_px < max_scroll_px
 
-    # Clip and draw
+    # Clip and draw text (clipped to text column width)
     prev_clip = screen.get_clip()
-    screen.set_clip(pygame.Rect(right_x, desc_top, right_w, avail_h))
+    screen.set_clip(pygame.Rect(right_x, desc_top, text_w, avail_h))
     ly = desc_top - scroll_px
     for text, is_quote in rendered:
         lh = blank_h if text == "" else line_h
@@ -2643,15 +2698,65 @@ def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: i
         ly += lh
     screen.set_clip(prev_clip)
 
-    # Scroll arrows (right edge of text panel)
-    arrow_font = get_gothic_font(int(18 * sc_w))
-    arr_x = right_x + right_w
-    if can_scroll_up:
-        up_s = arrow_font.render("\u25b2", False, C_ACCENT)
-        screen.blit(up_s, up_s.get_rect(right=arr_x, top=desc_top))
-    if can_scroll_dn:
-        dn_s = arrow_font.render("\u25bc", False, C_ACCENT)
-        screen.blit(dn_s, dn_s.get_rect(right=arr_x, bottom=desc_top + avail_h))
+    # ── Scrollbar ─────────────────────────────────────────────────────────────
+    global _codex_scroll_up_rect, _codex_scroll_dn_rect
+    global _codex_scroll_thumb_rect, _codex_scroll_track_rect
+    global _codex_scroll_max_steps, _codex_scroll_thumb_track_top, _codex_scroll_thumb_track_h
+
+    SB_RAD    = max(2, int(3 * sc_w))
+    SB_BTN_H  = int(18 * sc_h)
+    sb_track_top = desc_top + SB_BTN_H + int(6 * sc_h)
+    sb_track_bot = desc_top + avail_h - SB_BTN_H - int(6 * sc_h)
+    sb_track_h   = max(1, sb_track_bot - sb_track_top)
+    _codex_scroll_thumb_track_top = sb_track_top
+    _codex_scroll_thumb_track_h   = sb_track_h
+
+    mx_cur, my_cur = pygame.mouse.get_pos()
+    arrow_font = get_gothic_font(int(12 * sc_w))
+
+    if max_scroll_px > 0:
+        _codex_scroll_max_steps = max(1, -(-max_scroll_px // max(1, line_h)))
+
+        # ── Track ──
+        track_rect = pygame.Rect(_sb_x, sb_track_top, _sb_w, sb_track_h)
+        pygame.draw.rect(screen, (14, 6, 20), track_rect, border_radius=SB_RAD)
+        _codex_scroll_track_rect = track_rect
+
+        # ── Thumb ──
+        vis_frac    = min(1.0, avail_h / total_h) if total_h > 0 else 1.0
+        thumb_h     = max(int(24 * sc_h), int(sb_track_h * vis_frac))
+        thumb_offset = int((sb_track_h - thumb_h) * scroll_px / max_scroll_px)
+        thumb_rect  = pygame.Rect(_sb_x, sb_track_top + thumb_offset, _sb_w, thumb_h)
+        _codex_scroll_thumb_rect = thumb_rect
+
+        pygame.draw.rect(screen, (96, 55, 78), thumb_rect, border_radius=SB_RAD)
+
+        # ── Up / Down buttons ──
+        up_btn_rect = pygame.Rect(_sb_x, desc_top, _sb_w, SB_BTN_H)
+        dn_btn_rect = pygame.Rect(_sb_x, desc_top + avail_h - SB_BTN_H, _sb_w, SB_BTN_H)
+        for btn_rect, label, can_scroll, held_key in (
+            (up_btn_rect, "\u25b2", can_scroll_up, "up"),
+            (dn_btn_rect, "\u25bc", can_scroll_dn, "down"),
+        ):
+            if not can_scroll:
+                bg = (8, 4, 13)
+                lc = (42, 22, 34)
+            else:
+                bg = (13, 5, 18)
+                lc = (120, 78, 98)
+
+            pygame.draw.rect(screen, bg, btn_rect, border_radius=SB_RAD)
+            arr_s = arrow_font.render(label, False, lc)
+            screen.blit(arr_s, arr_s.get_rect(center=btn_rect.center))
+
+        _codex_scroll_up_rect = up_btn_rect
+        _codex_scroll_dn_rect = dn_btn_rect
+    else:
+        _codex_scroll_up_rect    = None
+        _codex_scroll_dn_rect    = None
+        _codex_scroll_thumb_rect = None
+        _codex_scroll_track_rect = None
+        _codex_scroll_max_steps  = 0
 
 def get_hovered_codex_item(mx: int, my: int) -> tuple[str, int] | None:
     """Returns ('suit', idx) or ('card', idx) or None."""
