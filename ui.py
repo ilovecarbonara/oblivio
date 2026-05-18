@@ -2502,7 +2502,7 @@ def draw_codex(
                 name_surf = name_font.render(name_text, False, C_WHITE)
                 name_surf.set_alpha(lore_alpha)
                 # Position on the right side
-                screen.blit(name_surf, name_surf.get_rect(left=cx - int(100 * sc_w), top=end_y - large_h // 2))
+                screen.blit(name_surf, name_surf.get_rect(left=cx - int(125 * sc_w), top=end_y - large_h // 2))
 
                 # Lore text
                 l_text = lore.get_lore(asuit, arank)
@@ -2524,7 +2524,7 @@ def draw_codex(
                 for line in lines:
                     ls = lore_font.render(line, False, C_DIM)
                     ls.set_alpha(lore_alpha)
-                    screen.blit(ls, ls.get_rect(left=cx - int(100 * sc_w), top=ly))
+                    screen.blit(ls, ls.get_rect(left=cx - int(125 * sc_w), top=ly))
                     ly += int(28 * sc_h)
 
                 # Instruction to close
@@ -2532,7 +2532,7 @@ def draw_codex(
                 hint_text = "Press SPACE or ESC to close"
                 hint_surf = hint_font.render(hint_text, False, C_ACCENT)
                 hint_surf.set_alpha(lore_alpha)
-                screen.blit(hint_surf, hint_surf.get_rect(left=cx - int(100 * sc_w), top=ly + int(30 * sc_h)))
+                screen.blit(hint_surf, hint_surf.get_rect(left=cx - int(125 * sc_w), top=ly + int(30 * sc_h)))
 
 def _draw_codex_suit_select(screen: pygame.Surface, selected_suit: int, frame: int) -> None:
     """Draw 4 cards in a vertical column on the left; lineage name + description on the right."""
