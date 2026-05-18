@@ -1395,8 +1395,11 @@ def draw_pause_button(screen: pygame.Surface, frame: int) -> None:
     _pause_btn_rect = pygame.Rect(bx, by, bw, bh)
     
     # Hover detection
+    import settings as cfg
     mx, my = pygame.mouse.get_pos()
-    is_hovered = _pause_btn_rect.collidepoint(mx, my)
+    is_hovered = False
+    if cfg.input_method != 1:
+        is_hovered = _pause_btn_rect.collidepoint(mx, my)
     
     # Pulse effect when hovered
     alpha_mult = 1.0
@@ -1988,6 +1991,9 @@ def get_hovered_difficulty_item(mx: int, my: int) -> int | None:
     return None
 
 def get_hovered_pause_btn(mx: int, my: int) -> bool:
+    import settings as cfg
+    if cfg.input_method == 1:
+        return False
     return _pause_btn_rect.collidepoint(mx, my)
 
 
